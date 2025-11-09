@@ -5,7 +5,7 @@
 ### Step 1.1: プロジェクト初期化
 - [x] プロジェクトルートディレクトリ作成
 - [x] Gitリポジトリ初期化（`git init`）
-- [ ] .gitignore作成
+- [x] .gitignore作成
   - service_account.json
   - credentials.json
   - *.pyc
