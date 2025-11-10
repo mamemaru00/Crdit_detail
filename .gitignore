@@ -1,0 +1,94 @@
+# Google API認証情報（機密情報）
+config/service_account.json
+config/credentials.json
+service_account.json
+credentials.json
+
+# Python関連
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.py[cod]
+*$py.class
+
+# 仮想環境
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.Python
+
+# CSVファイル（イオンカード明細データ）
+*.csv
+uploads/
+data/*.csv
+
+# ログファイル
+*.log
+logs/
+*.log.*
+
+# 一時ファイル
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# IDE設定ファイル
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# OS固有ファイル
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Flask関連
+instance/
+.webassets-cache
+.env
+.flaskenv
+
+# テストカバレッジ
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Docker関連（一部除外）
+*.pid
+*.seed
+*.pid.lock
+
+# その他
+*.sqlite
+*.db
