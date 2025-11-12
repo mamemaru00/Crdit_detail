@@ -15,10 +15,10 @@
   - uploads/
 
 ### Step 1.2: Python環境構築
-- [ ] Python 3.10以上のインストール確認
-- [ ] venv仮想環境作成（`python -m venv venv`）
-- [ ] venv有効化（Windows: `venv\Scripts\activate`, Mac/Linux: `source venv/bin/activate`）
-- [ ] requirements.txt作成
+- [x] Python 3.10以上のインストール確認
+- [x] venv仮想環境作成（`python -m venv venv`）
+- [x] venv有効化（Windows: `venv\Scripts\activate`, Mac/Linux: `source venv/bin/activate`）
+- [x] requirements.txt作成
   ```
   Flask>=3.1.2
   pandas>=2.0.0
@@ -27,7 +27,7 @@
   chardet>=5.0.0
   gunicorn>=23.0.0
   ```
-- [ ] 依存パッケージインストール（`pip install -r requirements.txt`）
+- [x] 依存パッケージインストール（`pip install -r requirements.txt`）
 
 ### Step 1.3: ディレクトリ構造作成
 - [ ] 以下のディレクトリを作成
