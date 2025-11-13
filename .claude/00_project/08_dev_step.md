@@ -30,7 +30,7 @@
 - [x] 依存パッケージインストール（`pip install -r requirements.txt`）
 
 ### Step 1.3: ディレクトリ構造作成
-- [ ] 以下のディレクトリを作成
+- [x] 以下のディレクトリを作成
   ```
   project_root/
   ├── modules/
