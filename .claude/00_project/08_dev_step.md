@@ -42,12 +42,12 @@
   ```
 
 ### Step 1.4: Google Cloud設定
-- [ ] Google Cloud Consoleでプロジェクト作成（creditapi-470614）
-- [ ] Google Sheets API有効化
-- [ ] サービスアカウント作成（creditapi@creditapi-470614.iam.gserviceaccount.com）
-- [ ] サービスアカウントキー（JSON）ダウンロード
-- [ ] `config/service_account.json`として配置
-- [ ] 対象スプレッドシートにサービスアカウントを編集者として共有
+- [x] Google Cloud Consoleでプロジェクト作成（creditapi-470614）
+- [x] Google Sheets API有効化
+- [x] サービスアカウント作成（creditapi@creditapi-470614.iam.gserviceaccount.com）
+- [x] サービスアカウントキー（JSON）ダウンロード
+- [x] `config/service_account.json`として配置
+- [x] 対象スプレッドシートにサービスアカウントを編集者として共有
 
 ### Step 1.5: 設定ファイル準備
 - [ ] `config/mapping.json`作成（初期データ）
