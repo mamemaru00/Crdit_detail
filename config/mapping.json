@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "mappings": [
+    {
+      "id": 1,
+      "pattern": "ユシンヤ",
+      "match_type": "contains",
+      "category": "外食費",
+      "column": "C",
+      "priority": 1
+    },
+    {
+      "id": 2,
+      "pattern": "AMAZON",
+      "match_type": "contains",
+      "category": "日用品費",
+      "column": "D",
+      "priority": 1
+    }
+  ],
+  "default": {
+    "category": "支払額",
+    "column": "B",
+    "note": "未分類はB列に振り分け"
+  }
+}
