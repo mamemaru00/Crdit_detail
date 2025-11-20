@@ -563,3 +563,150 @@ def extract_detail_data(df: pd.DataFrame) -> pd.DataFrame:
     detail_df.columns = ['date', 'user', 'store', 'payment_method', 'amount', 'note']
 
     return detail_df
+
+
+# ==================== 日付変換関数 ====================
+
+def convert_date_format(yymmdd_str: str) -> str:
+    """YYMMDD形式をYYYY/MM/DD形式に変換
+
+    6桁の日付文字列(YYMMDD)をYYYY/MM/DD形式に変換します。
+    年の判定ロジック:
+    - 00-49 → 2000年代(2000-2049)
+    - 50-99 → 1900年代(1950-1999)
+
+    Args:
+        yymmdd_str (str): 6桁の日付文字列(例: "250115")
+
+    Returns:
+        str: YYYY/MM/DD形式の日付文字列(例: "2025/01/15")
+
+    Raises:
+        DateConversionError: 以下の場合に発生
+            - 6桁数字でない場合
+            - 月が1-12の範囲外
+            - 日が1-31の範囲外
+
+    Example:
+        >>> convert_date_format("250115")
+        '2025/01/15'
+        >>> convert_date_format("240229")
+        '2024/02/29'
+        >>> convert_date_format("000101")
+        '2000/01/01'
+        >>> convert_date_format("491231")
+        '2049/12/31'
+        >>> convert_date_format("500101")
+        '1950/01/01'
+        >>> convert_date_format("991231")
+        '1999/12/31'
+        >>> convert_date_format("25011")
+        DateConversionError: 日付は6桁の数字である必要があります
+        >>> convert_date_format("251301")
+        DateConversionError: 月は1-12の範囲である必要があります
+
+    Note:
+        - 日付の妥当性チェックは簡易版(月:1-12, 日:1-31)
+        - 2月29日など詳細な暦チェックは行わない
+    """
+    # 6桁数字のパターンマッチ
+    if not re.match(DATE_PATTERN, yymmdd_str):
+        raise DateConversionError(
+            f"日付は6桁の数字である必要があります: {yymmdd_str}",
+            details={
+                "input": yymmdd_str,
+                "expected_pattern": "YYMMDD (6桁数字)"
+            }
+        )
+
+    # YY, MM, DDを抽出
+    yy = int(yymmdd_str[0:2])
+    mm = int(yymmdd_str[2:4])
+    dd = int(yymmdd_str[4:6])
+
+    # 月の妥当性チェック(1-12)
+    if mm < 1 or mm > 12:
+        raise DateConversionError(
+            f"月は1-12の範囲である必要があります: {mm}",
+            details={
+                "input": yymmdd_str,
+                "extracted_month": mm
+            }
+        )
+
+    # 日の妥当性チェック(1-31)
+    if dd < 1 or dd > 31:
+        raise DateConversionError(
+            f"日は1-31の範囲である必要があります: {dd}",
+            details={
+                "input": yymmdd_str,
+                "extracted_day": dd
+            }
+        )
+
+    # 年の判定(00-49 → 2000年代, 50-99 → 1900年代)
+    if yy <= 49:
+        yyyy = 2000 + yy
+    else:
+        yyyy = 1900 + yy
+
+    # YYYY/MM/DD形式に変換
+    return f"{yyyy:04d}/{mm:02d}/{dd:02d}"
+
+
+def extract_month_number(yymmdd_str: str) -> int:
+    """YYMMDD形式から月番号(1-12)を抽出
+
+    6桁の日付文字列(YYMMDD)から月番号を抽出します。
+
+    Args:
+        yymmdd_str (str): 6桁の日付文字列(例: "250115")
+
+    Returns:
+        int: 月番号(1-12の整数、例: 1)
+
+    Raises:
+        DateConversionError: 以下の場合に発生
+            - 6桁数字でない場合
+            - 月が1-12の範囲外
+
+    Example:
+        >>> extract_month_number("250115")
+        1
+        >>> extract_month_number("241231")
+        12
+        >>> extract_month_number("250601")
+        6
+        >>> extract_month_number("25011")
+        DateConversionError: 日付は6桁の数字である必要があります
+        >>> extract_month_number("251301")
+        DateConversionError: 月は1-12の範囲である必要があります
+
+    Note:
+        - 日付の妥当性チェックは月部分のみ(1-12)
+        - 年や日の妥当性はチェックしない
+    """
+    # 6桁数字のパターンマッチ
+    if not re.match(DATE_PATTERN, yymmdd_str):
+        raise DateConversionError(
+            f"日付は6桁の数字である必要があります: {yymmdd_str}",
+            details={
+                "input": yymmdd_str,
+                "expected_pattern": "YYMMDD (6桁数字)"
+            }
+        )
+
+    # MMを抽出
+    mm = int(yymmdd_str[2:4])
+
+    # 月の妥当性チェック(1-12)
+    if mm < 1 or mm > 12:
+        raise DateConversionError(
+            f"月は1-12の範囲である必要があります: {mm}",
+            details={
+                "input": yymmdd_str,
+                "extracted_month": mm
+            }
+        )
+
+    return mm
