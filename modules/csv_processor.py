@@ -541,7 +541,7 @@ def extract_detail_data(df: pd.DataFrame) -> pd.DataFrame:
         detail_df['note_temp'] = ""
 
     # 金額列(インデックス6)のカンマを除去
-    detail_df[6] = detail_df[6].str.replace(',', '', regex=False).str.replace('、', '', regex=False)
+    detail_df.loc[:, 6] = detail_df[6].str.replace(',', '', regex=False).str.replace('、', '', regex=False)
 
     # 金額が数値に変換可能か検証
     try:
@@ -710,3 +710,208 @@ def extract_month_number(yymmdd_str: str) -> int:
         )
 
     return mm
+
+
+# ==================== プレビュー生成関数 ====================
+
+def generate_preview(detail_data: List[Dict]) -> List[Dict]:
+    """明細データの先頭5件をプレビューとして返す
+
+    明細データリストから先頭5件(または5件未満の場合は全件)を抽出し、
+    プレビューデータとして返します。
+
+    Args:
+        detail_data (List[Dict]): 明細データのリスト
+            各要素は以下のキーを含む辞書:
+            - date (str): YYYY/MM/DD形式の日付
+            - year (int): 年
+            - month (int): 月番号(1-12)
+            - month_str (str): 月表示(例: "2025年8月")
+            - store (str): 店舗名
+            - amount (int): 金額
+            - user (str): 利用者区分
+            - payment_method (str): 支払方法
+            - note (str): 備考
+
+    Returns:
+        List[Dict]: 先頭5件のプレビューデータ(5件未満の場合は全件)
+
+    Example:
+        >>> detail_data = [
+        ...     {'date': '2025/01/15', 'store': 'イオン', 'amount': 5280, ...},
+        ...     {'date': '2025/01/16', 'store': 'セブンイレブン', 'amount': 1200, ...},
+        ...     # ... 全10件
+        ... ]
+        >>> preview = generate_preview(detail_data)
+        >>> len(preview)
+        5
+        >>> detail_data_small = [
+        ...     {'date': '2025/01/15', 'store': 'イオン', 'amount': 5280, ...},
+        ...     {'date': '2025/01/16', 'store': 'セブンイレブン', 'amount': 1200, ...}
+        ... ]
+        >>> preview_small = generate_preview(detail_data_small)
+        >>> len(preview_small)
+        2
+        >>> empty_data = []
+        >>> generate_preview(empty_data)
+        []
+
+    Note:
+        - PREVIEW_ROWS = 5 が定数として定義済み
+        - 空リストの場合も空リストを返す
+        - 入力データの変更は行わない(スライスで新しいリストを返す)
+    """
+    return detail_data[:PREVIEW_ROWS]
+
+
+# ==================== CSV統合処理関数 ====================
+
+def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
+    """CSV全体処理の統合関数(全フィールド対応)
+
+    CSVファイルの読み込みから明細データ抽出、プレビュー生成、
+    サマリー計算までを統合的に処理します。
+
+    処理フロー:
+    1. validate_file_path() - ファイルパス検証(パストラバーサル対策)
+    2. validate_file_size() - ファイルサイズ検証(DoS攻撃防止)
+    3. read_csv_file() - CSV読み込み(エンコーディング自動検出)
+    4. extract_detail_data() - 明細データ抽出(全6フィールド)
+    5. DataFrameをリスト形式に変換
+    6. 各レコードに追加フィールドを設定:
+       - year: int - 年(dateから抽出)
+       - month: int - 月番号(dateから抽出)
+       - month_str: str - 月表示(例: "2025年8月")
+       - amount: int - 金額を文字列からintに変換
+       - date: str - YYMMDD形式からYYYY/MM/DD形式に変換
+    7. generate_preview() - プレビュー生成
+    8. サマリー情報の計算
+
+    Args:
+        file_path (str): 処理対象のCSVファイルパス
+        allowed_dir (str): 許可されたディレクトリパス(デフォルト: '/tmp/uploads')
+
+    Returns:
+        Dict: 処理結果を含む辞書
+            {
+                'details': List[Dict],  # 全明細データ(全フィールド含む)
+                'preview': List[Dict],  # プレビューデータ(先頭5件)
+                'total_count': int,     # 総件数
+                'summary': {
+                    'total_amount': int,
+                    'date_range': {
+                        'start': str,   # YYYY/MM/DD形式
+                        'end': str      # YYYY/MM/DD形式
+                    }
+                }
+            }
+
+    Raises:
+        PathValidationError: ファイルパスが許可されたディレクトリ外の場合
+        InvalidFileFormatError: ファイルサイズ超過またはCSV読み込みエラー
+        EncodingDetectionError: エンコーディング検出エラー
+        DataExtractionError: 明細データ抽出エラー
+        DateConversionError: 日付変換エラー
+        CSVProcessingError: その他の予期しないエラー
+
+    Example:
+        >>> result = process_csv_file('/tmp/uploads/aeon_card.csv')
+        >>> result['total_count']
+        150
+        >>> result['summary']['total_amount']
+        1234567
+        >>> result['summary']['date_range']['start']
+        '2025/01/01'
+        >>> result['summary']['date_range']['end']
+        '2025/01/31'
+        >>> len(result['details'])
+        150
+        >>> len(result['preview'])
+        5
+        >>> result['details'][0].keys()
+        dict_keys(['date', 'user', 'store', 'payment_method', 'amount', 'note',
+                   'year', 'month', 'month_str'])
+
+    Note:
+        - 日付変換: dateフィールドはYYMMDD形式(例: "250115")で保存されているので、
+                   convert_date_format()を使用してYYYY/MM/DD形式(例: "2025/01/15")に変換
+        - 金額変換: amountフィールドは文字列(例: "5280")なので、intに変換
+        - year/month抽出: 変換後のdate(YYYY/MM/DD形式)を'/'で分割して抽出
+        - month_str生成: f"{year}年{month}月" 形式で生成
+        - エラーは適切な例外クラスで発生し、呼び出し側でハンドリング可能
+    """
+    try:
+        # 1. ファイルパス検証
+        validate_file_path(file_path, allowed_dir)
+
+        # 2. ファイルサイズ検証
+        validate_file_size(file_path)
+
+        # 3. CSV読み込み
+        df = read_csv_file(file_path)
+
+        # 4. 明細データ抽出
+        detail_df = extract_detail_data(df)
+
+        # 5. DataFrameをリスト形式に変換
+        details = detail_df.to_dict('records')
+
+        # 6. 各レコードに追加フィールドを設定
+        for record in details:
+            # 日付変換: YYMMDD → YYYY/MM/DD
+            original_date = record['date']  # YYMMDD形式(例: "250115")
+            converted_date = convert_date_format(original_date)  # "2025/01/15"
+            record['date'] = converted_date
+
+            # 年・月を抽出(変換後のdate "2025/01/15" から)
+            date_parts = converted_date.split('/')
+            year = int(date_parts[0])
+            month = int(date_parts[1])
+
+            record['year'] = year
+            record['month'] = month
+            record['month_str'] = f"{year}年{month}月"
+
+            # 金額を文字列からintに変換
+            record['amount'] = int(record['amount'])
+
+        # 7. プレビュー生成
+        preview = generate_preview(details)
+
+        # 8. サマリー情報の計算
+        total_count = len(details)
+        total_amount = sum(record['amount'] for record in details)
+
+        # 日付範囲の計算(既にYYYY/MM/DD形式に変換済み)
+        dates = [record['date'] for record in details]
+        date_range = {
+            'start': min(dates) if dates else '',
+            'end': max(dates) if dates else ''
+        }
+
+        # 結果を返す
+        return {
+            'details': details,
+            'preview': preview,
+            'total_count': total_count,
+            'summary': {
+                'total_amount': total_amount,
+                'date_range': date_range
+            }
+        }
+
+    except (PathValidationError, InvalidFileFormatError, EncodingDetectionError,
+            DataExtractionError, DateConversionError) as e:
+        # 既知のCSV処理エラーはそのまま再発生
+        raise
+
+    except Exception as e:
+        # 予期しないエラーはCSVProcessingErrorでラップ
+        raise CSVProcessingError(
+            f"CSV処理中に予期しないエラーが発生しました: {str(e)}",
+            details={
+                "file_path": file_path,
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
