@@ -27,6 +27,7 @@ venv.bak/
 
 # CSVファイル（イオンカード明細データ）
 *.csv
+!tests/test_data/*.csv
 uploads/
 data/*.csv
 
@@ -92,3 +93,6 @@ coverage.xml
 # その他
 *.sqlite
 *.db
+
+# テストデータ（実データは除外）
+tests/test_data/sample_real_*.csv
