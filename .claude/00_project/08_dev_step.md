@@ -3,9 +3,9 @@
 ## Phase 1: 環境構築
 
 ### Step 1.1: プロジェクト初期化
-- [ ] プロジェクトルートディレクトリ作成
-- [ ] Gitリポジトリ初期化（`git init`）
-- [ ] .gitignore作成
+- [x] プロジェクトルートディレクトリ作成
+- [x] Gitリポジトリ初期化（`git init`）
+- [x] .gitignore作成
   - service_account.json
   - credentials.json
   - *.pyc
@@ -15,10 +15,10 @@
   - uploads/
 
 ### Step 1.2: Python環境構築
-- [ ] Python 3.10以上のインストール確認
-- [ ] venv仮想環境作成（`python -m venv venv`）
-- [ ] venv有効化（Windows: `venv\Scripts\activate`, Mac/Linux: `source venv/bin/activate`）
-- [ ] requirements.txt作成
+- [x] Python 3.10以上のインストール確認
+- [x] venv仮想環境作成（`python -m venv venv`）
+- [x] venv有効化（Windows: `venv\Scripts\activate`, Mac/Linux: `source venv/bin/activate`）
+- [x] requirements.txt作成
   ```
   Flask>=3.1.2
   pandas>=2.0.0
@@ -27,10 +27,10 @@
   chardet>=5.0.0
   gunicorn>=23.0.0
   ```
-- [ ] 依存パッケージインストール（`pip install -r requirements.txt`）
+- [x] 依存パッケージインストール（`pip install -r requirements.txt`）
 
 ### Step 1.3: ディレクトリ構造作成
-- [ ] 以下のディレクトリを作成
+- [x] 以下のディレクトリを作成
   ```
   project_root/
   ├── modules/
@@ -42,15 +42,15 @@
   ```
 
 ### Step 1.4: Google Cloud設定
-- [ ] Google Cloud Consoleでプロジェクト作成（creditapi-470614）
-- [ ] Google Sheets API有効化
-- [ ] サービスアカウント作成（creditapi@creditapi-470614.iam.gserviceaccount.com）
-- [ ] サービスアカウントキー（JSON）ダウンロード
-- [ ] `config/service_account.json`として配置
-- [ ] 対象スプレッドシートにサービスアカウントを編集者として共有
+- [x] Google Cloud Consoleでプロジェクト作成（creditapi-470614）
+- [x] Google Sheets API有効化
+- [x] サービスアカウント作成（creditapi@creditapi-470614.iam.gserviceaccount.com）
+- [x] サービスアカウントキー（JSON）ダウンロード
+- [x] `config/service_account.json`として配置
+- [x] 対象スプレッドシートにサービスアカウントを編集者として共有
 
 ### Step 1.5: 設定ファイル準備
-- [ ] `config/mapping.json`作成（初期データ）
+- [x] `config/mapping.json`作成（初期データ）
   ```json
   {
     "mappings": [
@@ -59,30 +59,30 @@
     ]
   }
   ```
-- [ ] `config.py`作成（アプリケーション設定）
+- [x] `config.py`作成（アプリケーション設定）
 
 ## Phase 2: バックエンド開発
 
 ### Step 2.1: CSV処理モジュール作成（modules/csv_processor.py）
-- [ ] ファイル読込関数実装
-  - Shift_JIS自動検出（chardet使用）
-  - UTF-8への変換処理
-  - エンコーディングエラーハンドリング
-- [ ] 明細データ抽出関数実装
-  - 8行目以降の行を処理
-  - 6桁数字で始まる行を明細として判定
-  - 列0（利用日）、列2（利用先）、列6（利用金額）を抽出
-- [ ] 日付変換関数実装
-  - YYMMDD形式をYYYY/MM/DD形式に変換
-  - 年の判定ロジック（2000年代/2050年判定）
-  - 月番号抽出（1-12）
-- [ ] プレビュー生成関数実装
-  - 先頭5件のデータを返す
-  - 辞書形式で返却（date, store, amount）
-- [ ] エラーハンドリング
-  - ファイル形式エラー
-  - データ欠損エラー
-  - 日付変換エラー
+- [x] ファイル読込関数実装
+  - [x] Shift_JIS自動検出（chardet使用）
+  - [x] UTF-8への変換処理
+  - [x] エンコーディングエラーハンドリング
+- [x] 明細データ抽出関数実装
+  - [x] 8行目以降の行を処理
+  - [x] 6桁数字で始まる行を明細として判定
+  - [x] 列0（利用日）、列2（利用先）、列6（利用金額）を抽出
+- [x] 日付変換関数実装
+  - [x] YYMMDD形式をYYYY/MM/DD形式に変換
+  - [x] 年の判定ロジック（2000年代/2050年判定）
+  - [x] 月番号抽出（1-12）
+- [x] プレビュー生成関数実装
+  - [x] 先頭5件のデータを返す
+  - [x] 辞書形式で返却（date, store, amount）
+- [x] エラーハンドリング
+  - [x] ファイル形式エラー
+  - [x] データ欠損エラー
+  - [x] 日付変換エラー
 
 ### Step 2.2: カテゴリ判定エンジン作成（modules/category_logic.py）
 - [ ] マッピングデータ読込関数実装
@@ -319,16 +319,16 @@
 ## Phase 6: ドキュメント整備
 
 ### Step 6.1: README.md更新
-- [ ] プロジェクト概要
+- [x] プロジェクト概要
 - [ ] 環境構築手順
 - [ ] 使用方法
 - [ ] Docker起動方法
 
 ### Step 6.2: 運用手順書作成
-- [ ] サービスアカウント設定手順
-- [ ] スプレッドシート共有手順
+- [x] サービスアカウント設定手順
+- [x] スプレッドシート共有手順
 - [ ] CSV取込手順
 
 ### Step 6.3: トラブルシューティングガイド作成
-- [ ] よくあるエラーと対処法
+- [x] よくあるエラーと対処法
 - [ ] ログ確認方法
