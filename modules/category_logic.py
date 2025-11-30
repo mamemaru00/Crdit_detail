@@ -413,8 +413,16 @@ def match_exact(store_name: str, pattern: str) -> bool:
 
     Returns:
         bool: 一致判定結果
+
+    Example:
+        >>> match_exact("ユニクロ", "ユニクロ")
+        True
+        >>> match_exact("ユニクロ 池袋店", "ユニクロ")
+        False
     """
-    pass
+    if not store_name or not pattern:
+        return False
+    return store_name == pattern
 
 
 def match_startswith(store_name: str, pattern: str) -> bool:
@@ -427,8 +435,16 @@ def match_startswith(store_name: str, pattern: str) -> bool:
 
     Returns:
         bool: 一致判定結果
+
+    Example:
+        >>> match_startswith("ユニクロ 池袋店", "ユニクロ")
+        True
+        >>> match_startswith("池袋ユニクロ", "ユニクロ")
+        False
     """
-    pass
+    if not store_name or not pattern:
+        return False
+    return store_name.startswith(pattern)
 
 
 def match_contains(store_name: str, pattern: str) -> bool:
@@ -441,8 +457,16 @@ def match_contains(store_name: str, pattern: str) -> bool:
 
     Returns:
         bool: 一致判定結果
+
+    Example:
+        >>> match_contains("東京ユニクロ池袋店", "ユニクロ")
+        True
+        >>> match_contains("無印良品", "ユニクロ")
+        False
     """
-    pass
+    if not store_name or not pattern:
+        return False
+    return pattern in store_name
 
 
 def match_keyword(store_name: str, pattern: str) -> bool:
@@ -457,9 +481,24 @@ def match_keyword(store_name: str, pattern: str) -> bool:
         bool: 一致判定結果
 
     Example:
+        >>> match_keyword("イオン幕張新都心", "イオン 幕張")
+        True
+        >>> match_keyword("イオン池袋", "イオン 幕張")
+        False
+        >>> match_keyword("イオンスタイル幕張新都心", "イオン 幕張")
+        True
+
+    Note:
         pattern="イオン 幕張" → "イオン" AND "幕張" が店舗名に含まれる
     """
-    pass
+    if not store_name or not pattern:
+        return False
+
+    # スペースで分割してキーワードリストを作成
+    keywords = pattern.split()
+
+    # すべてのキーワードが店舗名に含まれているか確認（AND条件）
+    return all(keyword in store_name for keyword in keywords)
 
 
 def execute_pattern_match(store_name: str, entry: MappingEntry) -> bool:
@@ -475,8 +514,28 @@ def execute_pattern_match(store_name: str, entry: MappingEntry) -> bool:
 
     Raises:
         CategoryMatchError: 不明なmatch_type
+
+    Example:
+        >>> entry = {'pattern': 'ユニクロ', 'match_type': 'startswith', ...}
+        >>> execute_pattern_match("ユニクロ池袋", entry)
+        True
     """
-    pass
+    match_type = entry['match_type']
+    pattern = entry['pattern']
+
+    if match_type == MATCH_TYPE_EXACT:
+        return match_exact(store_name, pattern)
+    elif match_type == MATCH_TYPE_STARTSWITH:
+        return match_startswith(store_name, pattern)
+    elif match_type == MATCH_TYPE_CONTAINS:
+        return match_contains(store_name, pattern)
+    elif match_type == MATCH_TYPE_KEYWORD:
+        return match_keyword(store_name, pattern)
+    else:
+        raise CategoryMatchError(
+            f"不明なmatch_typeです: {match_type}",
+            details={'match_type': match_type, 'pattern': pattern, 'store_name': store_name}
+        )
 
 
 def find_best_match(
@@ -487,12 +546,12 @@ def find_best_match(
     優先順位に基づき最適なマッピングを選択
 
     優先順位:
-    1. 完全一致(exact)
-    2. 前方一致(startswith)
-    3. 部分一致(contains)
-    4. キーワード一致(keyword)
+    1. 完全一致(exact) - PRIORITY_EXACT=1
+    2. 前方一致(startswith) - PRIORITY_STARTSWITH=2
+    3. 部分一致(contains) - PRIORITY_CONTAINS=3
+    4. キーワード一致(keyword) - PRIORITY_KEYWORD=4
 
-    同じmatch_typeの場合は、priorityフィールドで判定
+    同じmatch_typeの場合は、priorityフィールドで判定（小さい値が優先）
 
     Args:
         store_name (str): 店舗名
@@ -500,8 +559,51 @@ def find_best_match(
 
     Returns:
         Optional[MappingEntry]: マッチしたエントリ(なければNone)
+
+    Example:
+        # "ユニクロ"という店舗名で
+        # 1. 完全一致: "ユニクロ" があれば、それを優先
+        # 2. 前方一致: "ユニ" があれば、それを次点として選択
     """
-    pass
+    if not store_name or not mappings:
+        return None
+
+    # match_typeの優先順位マップ
+    match_type_priority_map = {
+        MATCH_TYPE_EXACT: PRIORITY_EXACT,
+        MATCH_TYPE_STARTSWITH: PRIORITY_STARTSWITH,
+        MATCH_TYPE_CONTAINS: PRIORITY_CONTAINS,
+        MATCH_TYPE_KEYWORD: PRIORITY_KEYWORD
+    }
+
+    # マッチしたエントリのリストを作成
+    matched_entries: List[tuple[int, int, MappingEntry]] = []
+
+    for entry in mappings:
+        try:
+            if execute_pattern_match(store_name, entry):
+                # match_typeの優先順位を取得
+                match_type = entry['match_type']
+                type_priority = match_type_priority_map.get(match_type, 999)
+
+                # エントリ自身のpriorityを取得
+                entry_priority = entry.get('priority', 999)
+
+                # (match_type優先順位, entry priority, エントリ)のタプルを追加
+                matched_entries.append((type_priority, entry_priority, entry))
+        except CategoryMatchError:
+            # 不明なmatch_typeの場合はスキップ
+            continue
+
+    # マッチしたエントリがない場合
+    if not matched_entries:
+        return None
+
+    # 優先順位でソート: match_type優先順位 → entry priority
+    matched_entries.sort(key=lambda x: (x[0], x[1]))
+
+    # 最も優先度の高いエントリを返す
+    return matched_entries[0][2]
 
 
 def determine_category(
