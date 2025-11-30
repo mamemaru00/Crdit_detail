@@ -169,54 +169,238 @@ class InvalidMappingFormatError(CategoryLogicError):
 # ==================== Phase 2以降の関数スケルトン ====================
 # Phase 2, 3, 4で実装予定の関数を定義(pass実装)
 
-def load_mapping_data(config_path: str = DEFAULT_MAPPING_PATH) -> MappingData:
+def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH) -> MappingData:
     """
     マッピングデータをJSONファイルから読み込む
 
     Args:
-        config_path (str): マッピングファイルパス
+        mapping_path: マッピングファイルのパス（デフォルト: config/mapping.json）
 
     Returns:
-        MappingData: マッピングデータ辞書
+        MappingData: 読み込んだマッピングデータ
 
     Raises:
-        MappingLoadError: ファイルが存在しない、読み込めない
+        MappingLoadError: ファイルが存在しない、または読み込みエラー
         InvalidMappingFormatError: JSON形式が不正
         MappingValidationError: 必須フィールドが不足
     """
-    pass
+    # ファイルパスをPathオブジェクトに変換
+    file_path = Path(mapping_path)
+
+    # ファイル存在確認
+    if not file_path.exists():
+        raise MappingLoadError(
+            f"マッピングファイルが見つかりません: {mapping_path}",
+            details={'path': str(file_path)}
+        )
+
+    if not file_path.is_file():
+        raise MappingLoadError(
+            f"指定されたパスはファイルではありません: {mapping_path}",
+            details={'path': str(file_path)}
+        )
+
+    # JSONファイル読み込み
+    try:
+        with file_path.open('r', encoding='utf-8') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise InvalidMappingFormatError(
+            f"JSONファイルの解析に失敗しました: {e.msg}",
+            details={'path': str(file_path), 'error': str(e)}
+        )
+    except PermissionError:
+        raise MappingLoadError(
+            f"ファイルの読み込み権限がありません: {mapping_path}",
+            details={'path': str(file_path)}
+        )
+    except Exception as e:
+        raise MappingLoadError(
+            f"ファイルの読み込み中にエラーが発生しました: {str(e)}",
+            details={'path': str(file_path), 'error': str(e)}
+        )
+
+    # 必須フィールドの検証
+    required_fields = ['version', 'mappings', 'default']
+    missing_fields = [field for field in required_fields if field not in data]
+
+    if missing_fields:
+        raise MappingValidationError(
+            f"必須フィールドが不足しています: {', '.join(missing_fields)}",
+            details={'missing_fields': missing_fields, 'path': str(file_path)}
+        )
+
+    # mappingsがリストであることを確認
+    if not isinstance(data.get('mappings'), list):
+        raise InvalidMappingFormatError(
+            "mappingsフィールドはリスト形式である必要があります",
+            details={'type': type(data.get('mappings')).__name__, 'path': str(file_path)}
+        )
+
+    # defaultが辞書であることを確認
+    if not isinstance(data.get('default'), dict):
+        raise InvalidMappingFormatError(
+            "defaultフィールドは辞書形式である必要があります",
+            details={'type': type(data.get('default')).__name__, 'path': str(file_path)}
+        )
+
+    return data
 
 
-def validate_mapping_entry(entry: dict) -> bool:
+def validate_mapping_entry(entry: MappingEntry) -> None:
     """
-    マッピングエントリの妥当性を検証
+    単一のマッピングエントリを検証する
 
     Args:
-        entry (dict): マッピングエントリ辞書
-
-    Returns:
-        bool: 検証結果(True=正常、False=異常)
+        entry: 検証するマッピングエントリ
 
     Raises:
-        MappingValidationError: 必須フィールド不足、不正な値
+        MappingValidationError: 検証エラー時
     """
-    pass
+    # 必須フィールドのリスト
+    required_fields = ['id', 'pattern', 'match_type', 'category', 'column', 'priority']
+
+    # 必須フィールドの存在確認
+    missing_fields = [field for field in required_fields if field not in entry]
+    if missing_fields:
+        raise MappingValidationError(
+            f"エントリに必須フィールドが不足しています: {', '.join(missing_fields)}",
+            details={'missing_fields': missing_fields, 'entry': entry}
+        )
+
+    # フィールドの型チェック
+    if not isinstance(entry.get('id'), int):
+        raise MappingValidationError(
+            f"idフィールドは整数である必要があります: {entry.get('id')}",
+            details={'field': 'id', 'value': entry.get('id'), 'type': type(entry.get('id')).__name__}
+        )
+
+    if not isinstance(entry.get('pattern'), str) or not entry.get('pattern'):
+        raise MappingValidationError(
+            f"patternフィールドは空でない文字列である必要があります",
+            details={'field': 'pattern', 'value': entry.get('pattern')}
+        )
+
+    if not isinstance(entry.get('category'), str) or not entry.get('category'):
+        raise MappingValidationError(
+            f"categoryフィールドは空でない文字列である必要があります",
+            details={'field': 'category', 'value': entry.get('category')}
+        )
+
+    # match_typeの検証
+    match_type = entry.get('match_type')
+    if match_type not in VALID_MATCH_TYPES:
+        raise MappingValidationError(
+            f"match_typeが不正です: {match_type}。有効な値: {', '.join(VALID_MATCH_TYPES)}",
+            details={'field': 'match_type', 'value': match_type, 'valid_values': VALID_MATCH_TYPES}
+        )
+
+    # columnの検証
+    column = entry.get('column')
+    if column not in VALID_COLUMNS:
+        raise MappingValidationError(
+            f"columnが不正です: {column}。有効な値: B～V",
+            details={'field': 'column', 'value': column, 'valid_values': VALID_COLUMNS}
+        )
+
+    # priorityの検証
+    priority = entry.get('priority')
+    if not isinstance(priority, int) or priority < 1 or priority > 4:
+        raise MappingValidationError(
+            f"priorityは1～4の整数である必要があります: {priority}",
+            details={'field': 'priority', 'value': priority}
+        )
 
 
-def validate_mapping_data(data: MappingData) -> bool:
+def validate_mapping_data(data: MappingData) -> None:
     """
-    マッピングデータ全体の妥当性を検証
+    マッピングデータ全体を検証する
 
     Args:
-        data (MappingData): マッピングデータ辞書
-
-    Returns:
-        bool: 検証結果
+        data: 検証するマッピングデータ
 
     Raises:
-        MappingValidationError: データ構造が不正
+        MappingValidationError: データ検証エラー時
+        InvalidMappingFormatError: 形式エラー時
     """
-    pass
+    # versionフィールドの存在確認
+    if 'version' not in data:
+        raise MappingValidationError(
+            "versionフィールドが存在しません",
+            details={'data': data}
+        )
+
+    if not isinstance(data.get('version'), str):
+        raise InvalidMappingFormatError(
+            "versionフィールドは文字列である必要があります",
+            details={'type': type(data.get('version')).__name__}
+        )
+
+    # mappingsフィールドの検証
+    if 'mappings' not in data:
+        raise MappingValidationError(
+            "mappingsフィールドが存在しません",
+            details={'data': data}
+        )
+
+    if not isinstance(data.get('mappings'), list):
+        raise InvalidMappingFormatError(
+            "mappingsフィールドはリスト形式である必要があります",
+            details={'type': type(data.get('mappings')).__name__}
+        )
+
+    # 各マッピングエントリを検証
+    mappings = data.get('mappings', [])
+    for index, entry in enumerate(mappings):
+        try:
+            validate_mapping_entry(entry)
+        except MappingValidationError as e:
+            # エントリのインデックス情報を追加
+            raise MappingValidationError(
+                f"mappings[{index}]の検証エラー: {e.message}",
+                details={'index': index, 'entry': entry, 'original_error': e.details}
+            )
+
+    # ID重複チェック
+    id_list = [entry.get('id') for entry in mappings if 'id' in entry]
+    duplicate_ids = [id_val for id_val in set(id_list) if id_list.count(id_val) > 1]
+    if duplicate_ids:
+        raise MappingValidationError(
+            f"重複するIDが検出されました: {duplicate_ids}",
+            details={'duplicate_ids': duplicate_ids}
+        )
+
+    # defaultフィールドの検証
+    if 'default' not in data:
+        raise MappingValidationError(
+            "defaultフィールドが存在しません",
+            details={'data': data}
+        )
+
+    if not isinstance(data.get('default'), dict):
+        raise InvalidMappingFormatError(
+            "defaultフィールドは辞書形式である必要があります",
+            details={'type': type(data.get('default')).__name__}
+        )
+
+    # defaultフィールドの必須キー確認
+    default_data = data.get('default', {})
+    required_default_keys = ['category', 'column']
+    missing_default_keys = [key for key in required_default_keys if key not in default_data]
+
+    if missing_default_keys:
+        raise MappingValidationError(
+            f"defaultフィールドに必須キーが不足しています: {', '.join(missing_default_keys)}",
+            details={'missing_keys': missing_default_keys, 'default': default_data}
+        )
+
+    # defaultのcolumnが有効な値か確認
+    default_column = default_data.get('column')
+    if default_column not in VALID_COLUMNS:
+        raise MappingValidationError(
+            f"defaultのcolumnが不正です: {default_column}。有効な値: B～V",
+            details={'field': 'default.column', 'value': default_column, 'valid_values': VALID_COLUMNS}
+        )
 
 
 def match_exact(store_name: str, pattern: str) -> bool:
