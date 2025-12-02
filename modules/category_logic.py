@@ -626,8 +626,48 @@ def determine_category(
                 'pattern': Optional[str],  # マッチしたパターン
                 'match_type': Optional[str]  # マッチタイプ
             }
+
+    Example:
+        # マッチした場合
+        >>> result = determine_category("ユニクロ", mapping_data)
+        >>> result['matched']
+        True
+        >>> result['category']
+        '外食費'
+        >>> result['column']
+        'C'
+
+        # マッチしなかった場合（デフォルト値を使用）
+        >>> result = determine_category("未登録店舗", mapping_data)
+        >>> result['matched']
+        False
+        >>> result['category']
+        '支払額'
+        >>> result['column']
+        'B'
     """
-    pass
+    # 1. find_best_matchでマッピング検索
+    best_match = find_best_match(store_name, mapping_data['mappings'])
+
+    # 2. マッチした場合
+    if best_match:
+        return MatchResult(
+            matched=True,
+            category=best_match['category'],
+            column=best_match['column'],
+            pattern=best_match['pattern'],
+            match_type=best_match['match_type']
+        )
+
+    # 3. マッチしなかった場合（デフォルト列）
+    default = mapping_data['default']
+    return MatchResult(
+        matched=False,
+        category=default['category'],
+        column=default['column'],
+        pattern=None,
+        match_type=None
+    )
 
 
 def detect_unregistered_stores(
@@ -646,7 +686,7 @@ def detect_unregistered_stores(
         mapping_data (MappingData): マッピングデータ
 
     Returns:
-        List[Dict]: 未登録店舗リスト
+        List[Dict]: 未登録店舗リスト（金額降順ソート）
             [
                 {
                     'store': '未登録店舗A',
@@ -655,8 +695,67 @@ def detect_unregistered_stores(
                 },
                 ...
             ]
+
+    Example:
+        >>> records = [
+        ...     {'store': '未登録A', 'amount': 1000},
+        ...     {'store': '未登録A', 'amount': 2000},
+        ...     {'store': '未登録B', 'amount': 500}
+        ... ]
+        >>> result = detect_unregistered_stores(records, mapping_data)
+        >>> result[0]['store']
+        '未登録A'
+        >>> result[0]['total_amount']
+        3000
+        >>> result[0]['count']
+        2
     """
-    pass
+    # 空リストの場合は即座に返却
+    if not records:
+        return []
+
+    # 未登録店舗を集計するための辞書
+    unregistered_map: Dict[str, Dict[str, int]] = {}
+
+    # 1. 各レコードに対してdetermine_category()を実行
+    for record in records:
+        # storeフィールドが存在しない場合はスキップ
+        if 'store' not in record:
+            continue
+
+        store_name = record['store']
+        amount = record.get('amount', 0)
+
+        # カテゴリ判定を実行
+        match_result = determine_category(store_name, mapping_data)
+
+        # 2. matched=Falseの店舗を抽出
+        if not match_result['matched']:
+            # 3. 店舗名でグループ化
+            if store_name not in unregistered_map:
+                unregistered_map[store_name] = {
+                    'count': 0,
+                    'total_amount': 0
+                }
+
+            # 4. 店舗ごとに件数と金額合計を算出
+            unregistered_map[store_name]['count'] += 1
+            unregistered_map[store_name]['total_amount'] += amount
+
+    # 辞書からリスト形式に変換
+    unregistered_list = [
+        {
+            'store': store_name,
+            'count': data['count'],
+            'total_amount': data['total_amount']
+        }
+        for store_name, data in unregistered_map.items()
+    ]
+
+    # 5. 金額降順でソート
+    unregistered_list.sort(key=lambda x: x['total_amount'], reverse=True)
+
+    return unregistered_list
 
 
 def determine_categories_batch(
@@ -683,5 +782,57 @@ def determine_categories_batch(
                 },
                 ...
             ]
+
+    Example:
+        >>> records = [
+        ...     {'store': 'ユニクロ', 'amount': 1000},
+        ...     {'store': '未登録店舗', 'amount': 500}
+        ... ]
+        >>> results = determine_categories_batch(records, mapping_data)
+        >>> results[0]['category']
+        '外食費'
+        >>> results[0]['matched']
+        True
+        >>> results[1]['category']
+        '支払額'
+        >>> results[1]['matched']
+        False
     """
-    pass
+    # 空リストの場合は即座に返却
+    if not records:
+        return []
+
+    # カテゴリ情報を付与したレコードのリスト
+    enriched_records: List[Dict] = []
+
+    # 1. 各レコードをループ処理
+    for record in records:
+        # 元のレコードをコピー（元データを保持）
+        enriched_record = record.copy()
+
+        # 2. storeフィールドが存在する場合のみカテゴリ判定
+        if 'store' in record:
+            store_name = record['store']
+
+            # 3. カテゴリ判定を実行
+            match_result = determine_category(store_name, mapping_data)
+
+            # 4. 判定結果をレコードに追加
+            enriched_record['category'] = match_result['category']
+            enriched_record['column'] = match_result['column']
+            enriched_record['matched'] = match_result['matched']
+            enriched_record['pattern'] = match_result.get('pattern')
+            enriched_record['match_type'] = match_result.get('match_type')
+        else:
+            # storeフィールドがない場合はデフォルト値を設定
+            default = mapping_data['default']
+            enriched_record['category'] = default['category']
+            enriched_record['column'] = default['column']
+            enriched_record['matched'] = False
+            enriched_record['pattern'] = None
+            enriched_record['match_type'] = None
+
+        # リストに追加
+        enriched_records.append(enriched_record)
+
+    return enriched_records
