@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "mappings": [],
+  "default": {
+    "category": "支払額",
+    "column": "B"
+  }
+}

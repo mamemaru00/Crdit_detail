@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "mappings": [
+    {
+      "id": 1,
+      "pattern": "",
+      "match_type": "exact",
+      "category": "外食費",
+      "column": "C",
+      "priority": 1,
+      "note": null
+    },
+    {
+      "id": 2,
+      "pattern": "①②髙﨑",
+      "match_type": "exact",
+      "category": "日用品費",
+      "column": "D",
+      "priority": 1,
+      "note": null
+    }
+  ],
+  "default": {
+    "category": "支払額",
+    "column": "B"
+  }
+}
