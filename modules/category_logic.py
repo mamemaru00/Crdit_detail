@@ -10,6 +10,27 @@ Googleスプレッドシートの該当列へマッピングする機能を提�
 - 優先順位に基づくカテゴリ決定
 - 未登録店舗の検出と集計
 - バッチ処理によるカテゴリ一括判定
+
+使用例:
+    # 1. マッピングデータ読み込み
+    >>> mapping_data = load_mapping_data('config/mapping.json')
+
+    # 2. 単一店舗のカテゴリ判定
+    >>> result = determine_category('ユニクロ池袋店', mapping_data)
+    >>> print(result['category'])  # '外食費'
+    >>> print(result['column'])    # 'C'
+
+    # 3. 複数レコードの一括判定
+    >>> records = [
+    ...     {'store': 'ユニクロ池袋', 'amount': 5000},
+    ...     {'store': 'AMAZON', 'amount': 3000}
+    ... ]
+    >>> enriched = determine_categories_batch(records, mapping_data)
+
+    # 4. 未登録店舗の検出
+    >>> unregistered = detect_unregistered_stores(records, mapping_data)
+    >>> for store in unregistered:
+    ...     print(f"{store['store']}: {store['total_amount']}円")
 """
 
 import json
