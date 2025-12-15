@@ -72,6 +72,11 @@ PRIORITY_EXACT = 1       # 完全一致の優先度
 PRIORITY_STARTSWITH = 2  # 前方一致の優先度
 PRIORITY_CONTAINS = 3    # 部分一致の優先度
 PRIORITY_KEYWORD = 4     # キーワード一致の優先度
+PRIORITY_DEFAULT = 999   # デフォルト優先度（マッチしない場合）
+
+# 優先順位の範囲
+MIN_PRIORITY = 1
+MAX_PRIORITY = 4
 
 
 # ==================== 型定義（TypedDict） ====================
@@ -268,6 +273,80 @@ def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH) -> MappingData:
     return data
 
 
+def _validate_required_fields(entry: dict, required_fields: List[str], context: str = "エントリ") -> None:
+    """
+    必須フィールドの存在を検証する（内部ヘルパー関数）
+
+    Args:
+        entry: 検証対象の辞書
+        required_fields: 必須フィールドのリスト
+        context: エラーメッセージ用のコンテキスト
+
+    Raises:
+        MappingValidationError: 必須フィールドが不足している場合
+    """
+    missing_fields = [field for field in required_fields if field not in entry]
+    if missing_fields:
+        raise MappingValidationError(
+            f"{context}に必須フィールドが不足しています: {', '.join(missing_fields)}",
+            details={'missing_fields': missing_fields, 'entry': entry}
+        )
+
+
+def _validate_field_type(entry: dict, field_name: str, expected_type: type,
+                         allow_empty: bool = False) -> None:
+    """
+    フィールドの型を検証する（内部ヘルパー関数）
+
+    Args:
+        entry: 検証対象の辞書
+        field_name: フィールド名
+        expected_type: 期待される型
+        allow_empty: 空文字列を許可するか（文字列型の場合のみ）
+
+    Raises:
+        MappingValidationError: 型が一致しない、または空の場合
+    """
+    value = entry.get(field_name)
+
+    # 型チェック
+    if not isinstance(value, expected_type):
+        raise MappingValidationError(
+            f"{field_name}フィールドは{expected_type.__name__}である必要があります: {value}",
+            details={'field': field_name, 'value': value, 'type': type(value).__name__}
+        )
+
+    # 文字列の場合、空文字列チェック
+    if expected_type == str and not allow_empty and not value:
+        raise MappingValidationError(
+            f"{field_name}フィールドは空でない文字列である必要があります",
+            details={'field': field_name, 'value': value}
+        )
+
+
+def _validate_field_in_choices(entry: dict, field_name: str, valid_choices: List[str],
+                                error_hint: str = "") -> None:
+    """
+    フィールドの値が有効な選択肢に含まれるか検証する（内部ヘルパー関数）
+
+    Args:
+        entry: 検証対象の辞書
+        field_name: フィールド名
+        valid_choices: 有効な選択肢のリスト
+        error_hint: エラーメッセージに追加するヒント
+
+    Raises:
+        MappingValidationError: 値が有効な選択肢に含まれない場合
+    """
+    value = entry.get(field_name)
+    if value not in valid_choices:
+        hint_msg = f"。有効な値: {error_hint}" if error_hint else f"。有効な値: {', '.join(valid_choices)}"
+        raise MappingValidationError(
+            f"{field_name}が不正です: {value}{hint_msg}",
+            details={'field': field_name, 'value': value, 'valid_values': valid_choices}
+        )
+
+
 def validate_mapping_entry(entry: MappingEntry) -> None:
     """
     単一のマッピングエントリを検証する
@@ -278,58 +357,46 @@ def validate_mapping_entry(entry: MappingEntry) -> None:
     Raises:
         MappingValidationError: 検証エラー時
     """
-    # 必須フィールドのリスト
-    required_fields = ['id', 'pattern', 'match_type', 'category', 'column', 'priority']
-
     # 必須フィールドの存在確認
-    missing_fields = [field for field in required_fields if field not in entry]
-    if missing_fields:
-        raise MappingValidationError(
-            f"エントリに必須フィールドが不足しています: {', '.join(missing_fields)}",
-            details={'missing_fields': missing_fields, 'entry': entry}
-        )
+    required_fields = ['id', 'pattern', 'match_type', 'category', 'column', 'priority']
+    _validate_required_fields(entry, required_fields)
 
     # フィールドの型チェック
-    if not isinstance(entry.get('id'), int):
-        raise MappingValidationError(
-            f"idフィールドは整数である必要があります: {entry.get('id')}",
-            details={'field': 'id', 'value': entry.get('id'), 'type': type(entry.get('id')).__name__}
-        )
-
-    if not isinstance(entry.get('pattern'), str) or not entry.get('pattern'):
-        raise MappingValidationError(
-            f"patternフィールドは空でない文字列である必要があります",
-            details={'field': 'pattern', 'value': entry.get('pattern')}
-        )
-
-    if not isinstance(entry.get('category'), str) or not entry.get('category'):
-        raise MappingValidationError(
-            f"categoryフィールドは空でない文字列である必要があります",
-            details={'field': 'category', 'value': entry.get('category')}
-        )
+    _validate_field_type(entry, 'id', int)
+    _validate_field_type(entry, 'pattern', str, allow_empty=False)
+    _validate_field_type(entry, 'category', str, allow_empty=False)
 
     # match_typeの検証
-    match_type = entry.get('match_type')
-    if match_type not in VALID_MATCH_TYPES:
-        raise MappingValidationError(
-            f"match_typeが不正です: {match_type}。有効な値: {', '.join(VALID_MATCH_TYPES)}",
-            details={'field': 'match_type', 'value': match_type, 'valid_values': VALID_MATCH_TYPES}
-        )
+    _validate_field_in_choices(entry, 'match_type', VALID_MATCH_TYPES)
 
     # columnの検証
-    column = entry.get('column')
-    if column not in VALID_COLUMNS:
+    _validate_field_in_choices(entry, 'column', VALID_COLUMNS, error_hint="B～V")
+
+    # priorityの検証（範囲チェック）
+    priority = entry.get('priority')
+    if not isinstance(priority, int) or priority < MIN_PRIORITY or priority > MAX_PRIORITY:
         raise MappingValidationError(
-            f"columnが不正です: {column}。有効な値: B～V",
-            details={'field': 'column', 'value': column, 'valid_values': VALID_COLUMNS}
+            f"priorityは{MIN_PRIORITY}～{MAX_PRIORITY}の整数である必要があります: {priority}",
+            details={'field': 'priority', 'value': priority}
         )
 
-    # priorityの検証
-    priority = entry.get('priority')
-    if not isinstance(priority, int) or priority < 1 or priority > 4:
+
+def _validate_duplicate_ids(mappings: List[MappingEntry]) -> None:
+    """
+    マッピングエントリのID重複をチェックする（内部ヘルパー関数）
+
+    Args:
+        mappings: マッピングエントリのリスト
+
+    Raises:
+        MappingValidationError: IDが重複している場合
+    """
+    id_list = [entry['id'] for entry in mappings if 'id' in entry]
+    duplicate_ids = [id_val for id_val in set(id_list) if id_list.count(id_val) > 1]
+    if duplicate_ids:
         raise MappingValidationError(
-            f"priorityは1～4の整数である必要があります: {priority}",
-            details={'field': 'priority', 'value': priority}
+            f"重複するIDが検出されました: {duplicate_ids}",
+            details={'duplicate_ids': duplicate_ids}
         )
 
 
@@ -344,26 +411,12 @@ def validate_mapping_data(data: MappingData) -> None:
         MappingValidationError: データ検証エラー時
         InvalidMappingFormatError: 形式エラー時
     """
-    # versionフィールドの存在確認
-    if 'version' not in data:
-        raise MappingValidationError(
-            "versionフィールドが存在しません",
-            details={'data': data}
-        )
-
-    if not isinstance(data.get('version'), str):
-        raise InvalidMappingFormatError(
-            "versionフィールドは文字列である必要があります",
-            details={'type': type(data.get('version')).__name__}
-        )
+    # versionフィールドの検証
+    _validate_required_fields(data, ['version'], context="マッピングデータ")
+    _validate_field_type(data, 'version', str)
 
     # mappingsフィールドの検証
-    if 'mappings' not in data:
-        raise MappingValidationError(
-            "mappingsフィールドが存在しません",
-            details={'data': data}
-        )
-
+    _validate_required_fields(data, ['mappings'], context="マッピングデータ")
     if not isinstance(data.get('mappings'), list):
         raise InvalidMappingFormatError(
             "mappingsフィールドはリスト形式である必要があります",
@@ -383,21 +436,10 @@ def validate_mapping_data(data: MappingData) -> None:
             )
 
     # ID重複チェック
-    id_list = [entry.get('id') for entry in mappings if 'id' in entry]
-    duplicate_ids = [id_val for id_val in set(id_list) if id_list.count(id_val) > 1]
-    if duplicate_ids:
-        raise MappingValidationError(
-            f"重複するIDが検出されました: {duplicate_ids}",
-            details={'duplicate_ids': duplicate_ids}
-        )
+    _validate_duplicate_ids(mappings)
 
     # defaultフィールドの検証
-    if 'default' not in data:
-        raise MappingValidationError(
-            "defaultフィールドが存在しません",
-            details={'data': data}
-        )
-
+    _validate_required_fields(data, ['default'], context="マッピングデータ")
     if not isinstance(data.get('default'), dict):
         raise InvalidMappingFormatError(
             "defaultフィールドは辞書形式である必要があります",
@@ -406,22 +448,24 @@ def validate_mapping_data(data: MappingData) -> None:
 
     # defaultフィールドの必須キー確認
     default_data = data.get('default', {})
-    required_default_keys = ['category', 'column']
-    missing_default_keys = [key for key in required_default_keys if key not in default_data]
-
-    if missing_default_keys:
-        raise MappingValidationError(
-            f"defaultフィールドに必須キーが不足しています: {', '.join(missing_default_keys)}",
-            details={'missing_keys': missing_default_keys, 'default': default_data}
-        )
+    _validate_required_fields(default_data, ['category', 'column'], context="defaultフィールド")
 
     # defaultのcolumnが有効な値か確認
-    default_column = default_data.get('column')
-    if default_column not in VALID_COLUMNS:
-        raise MappingValidationError(
-            f"defaultのcolumnが不正です: {default_column}。有効な値: B～V",
-            details={'field': 'default.column', 'value': default_column, 'valid_values': VALID_COLUMNS}
-        )
+    _validate_field_in_choices(default_data, 'column', VALID_COLUMNS, error_hint="B～V")
+
+
+def _is_valid_match_input(store_name: str, pattern: str) -> bool:
+    """
+    マッチング入力の有効性をチェックする（内部ヘルパー関数）
+
+    Args:
+        store_name: 店舗名
+        pattern: パターン文字列
+
+    Returns:
+        bool: 両方が空でない文字列ならTrue
+    """
+    return bool(store_name and pattern)
 
 
 def match_exact(store_name: str, pattern: str) -> bool:
@@ -441,9 +485,7 @@ def match_exact(store_name: str, pattern: str) -> bool:
         >>> match_exact("ユニクロ 池袋店", "ユニクロ")
         False
     """
-    if not store_name or not pattern:
-        return False
-    return store_name == pattern
+    return _is_valid_match_input(store_name, pattern) and store_name == pattern
 
 
 def match_startswith(store_name: str, pattern: str) -> bool:
@@ -463,9 +505,7 @@ def match_startswith(store_name: str, pattern: str) -> bool:
         >>> match_startswith("池袋ユニクロ", "ユニクロ")
         False
     """
-    if not store_name or not pattern:
-        return False
-    return store_name.startswith(pattern)
+    return _is_valid_match_input(store_name, pattern) and store_name.startswith(pattern)
 
 
 def match_contains(store_name: str, pattern: str) -> bool:
@@ -485,9 +525,7 @@ def match_contains(store_name: str, pattern: str) -> bool:
         >>> match_contains("無印良品", "ユニクロ")
         False
     """
-    if not store_name or not pattern:
-        return False
-    return pattern in store_name
+    return _is_valid_match_input(store_name, pattern) and pattern in store_name
 
 
 def match_keyword(store_name: str, pattern: str) -> bool:
@@ -512,14 +550,11 @@ def match_keyword(store_name: str, pattern: str) -> bool:
     Note:
         pattern="イオン 幕張" → "イオン" AND "幕張" が店舗名に含まれる
     """
-    if not store_name or not pattern:
+    if not _is_valid_match_input(store_name, pattern):
         return False
 
-    # スペースで分割してキーワードリストを作成
-    keywords = pattern.split()
-
-    # すべてのキーワードが店舗名に含まれているか確認（AND条件）
-    return all(keyword in store_name for keyword in keywords)
+    # スペースで分割してキーワードリストを作成し、すべてが店舗名に含まれるか確認
+    return all(keyword in store_name for keyword in pattern.split())
 
 
 def execute_pattern_match(store_name: str, entry: MappingEntry) -> bool:
@@ -559,6 +594,31 @@ def execute_pattern_match(store_name: str, entry: MappingEntry) -> bool:
         )
 
 
+# match_typeの優先順位マップ（定数として定義）
+_MATCH_TYPE_PRIORITY_MAP = {
+    MATCH_TYPE_EXACT: PRIORITY_EXACT,
+    MATCH_TYPE_STARTSWITH: PRIORITY_STARTSWITH,
+    MATCH_TYPE_CONTAINS: PRIORITY_CONTAINS,
+    MATCH_TYPE_KEYWORD: PRIORITY_KEYWORD
+}
+
+
+def _get_match_priority(entry: MappingEntry) -> tuple[int, int]:
+    """
+    エントリのマッチ優先度を取得する（内部ヘルパー関数）
+
+    Args:
+        entry: マッピングエントリ
+
+    Returns:
+        tuple[int, int]: (match_type優先順位, entry priority)
+    """
+    match_type = entry['match_type']
+    type_priority = _MATCH_TYPE_PRIORITY_MAP.get(match_type, PRIORITY_DEFAULT)
+    entry_priority = entry.get('priority', PRIORITY_DEFAULT)
+    return (type_priority, entry_priority)
+
+
 def find_best_match(
     store_name: str,
     mappings: List[MappingEntry]
@@ -589,29 +649,15 @@ def find_best_match(
     if not store_name or not mappings:
         return None
 
-    # match_typeの優先順位マップ
-    match_type_priority_map = {
-        MATCH_TYPE_EXACT: PRIORITY_EXACT,
-        MATCH_TYPE_STARTSWITH: PRIORITY_STARTSWITH,
-        MATCH_TYPE_CONTAINS: PRIORITY_CONTAINS,
-        MATCH_TYPE_KEYWORD: PRIORITY_KEYWORD
-    }
-
     # マッチしたエントリのリストを作成
     matched_entries: List[tuple[int, int, MappingEntry]] = []
 
     for entry in mappings:
         try:
             if execute_pattern_match(store_name, entry):
-                # match_typeの優先順位を取得
-                match_type = entry['match_type']
-                type_priority = match_type_priority_map.get(match_type, 999)
-
-                # エントリ自身のpriorityを取得
-                entry_priority = entry.get('priority', 999)
-
-                # (match_type優先順位, entry priority, エントリ)のタプルを追加
-                matched_entries.append((type_priority, entry_priority, entry))
+                # 優先順位を取得して追加
+                priority_tuple = _get_match_priority(entry)
+                matched_entries.append((*priority_tuple, entry))
         except CategoryMatchError:
             # 不明なmatch_typeの場合はスキップ
             continue
@@ -621,10 +667,11 @@ def find_best_match(
         return None
 
     # 優先順位でソート: match_type優先順位 → entry priority
-    matched_entries.sort(key=lambda x: (x[0], x[1]))
+    # min関数を使用してソート処理を効率化
+    best_match = min(matched_entries, key=lambda x: (x[0], x[1]))
 
     # 最も優先度の高いエントリを返す
-    return matched_entries[0][2]
+    return best_match[2]
 
 
 def determine_category(
@@ -691,6 +738,23 @@ def determine_category(
     )
 
 
+def _aggregate_unregistered_store(unregistered_map: Dict[str, Dict[str, int]],
+                                  store_name: str, amount: int) -> None:
+    """
+    未登録店舗を集計マップに追加する（内部ヘルパー関数）
+
+    Args:
+        unregistered_map: 未登録店舗の集計マップ
+        store_name: 店舗名
+        amount: 金額
+    """
+    if store_name not in unregistered_map:
+        unregistered_map[store_name] = {'count': 0, 'total_amount': 0}
+
+    unregistered_map[store_name]['count'] += 1
+    unregistered_map[store_name]['total_amount'] += amount
+
+
 def detect_unregistered_stores(
     records: List[Dict],
     mapping_data: MappingData
@@ -738,45 +802,75 @@ def detect_unregistered_stores(
     # 未登録店舗を集計するための辞書
     unregistered_map: Dict[str, Dict[str, int]] = {}
 
-    # 1. 各レコードに対してdetermine_category()を実行
+    # 各レコードに対してカテゴリ判定を実行
     for record in records:
         # storeフィールドが存在しない場合はスキップ
-        if 'store' not in record:
+        store_name = record.get('store')
+        if not store_name:
             continue
-
-        store_name = record['store']
-        amount = record.get('amount', 0)
 
         # カテゴリ判定を実行
         match_result = determine_category(store_name, mapping_data)
 
-        # 2. matched=Falseの店舗を抽出
+        # matched=Falseの店舗を集計
         if not match_result['matched']:
-            # 3. 店舗名でグループ化
-            if store_name not in unregistered_map:
-                unregistered_map[store_name] = {
-                    'count': 0,
-                    'total_amount': 0
-                }
+            amount = record.get('amount', 0)
+            _aggregate_unregistered_store(unregistered_map, store_name, amount)
 
-            # 4. 店舗ごとに件数と金額合計を算出
-            unregistered_map[store_name]['count'] += 1
-            unregistered_map[store_name]['total_amount'] += amount
+    # 辞書からリスト形式に変換し、金額降順でソート
+    return sorted(
+        [
+            {
+                'store': store_name,
+                'count': data['count'],
+                'total_amount': data['total_amount']
+            }
+            for store_name, data in unregistered_map.items()
+        ],
+        key=lambda x: x['total_amount'],
+        reverse=True
+    )
 
-    # 辞書からリスト形式に変換
-    unregistered_list = [
-        {
-            'store': store_name,
-            'count': data['count'],
-            'total_amount': data['total_amount']
-        }
-        for store_name, data in unregistered_map.items()
-    ]
 
-    # 5. 金額降順でソート
-    unregistered_list.sort(key=lambda x: x['total_amount'], reverse=True)
+def _enrich_record_with_category(record: Dict, mapping_data: MappingData) -> Dict:
+    """
+    レコードにカテゴリ情報を付与する（内部ヘルパー関数）
 
-    return unregistered_list
+    Args:
+        record: 明細レコード
+        mapping_data: マッピングデータ
+
+    Returns:
+        Dict: カテゴリ情報付きレコード
+    """
+    enriched_record = record.copy()
+
+    # storeフィールドが存在する場合のみカテゴリ判定
+    store_name = record.get('store')
+    if store_name:
+        # カテゴリ判定を実行
+        match_result = determine_category(store_name, mapping_data)
+
+        # 判定結果をレコードに追加
+        enriched_record.update({
+            'category': match_result['category'],
+            'column': match_result['column'],
+            'matched': match_result['matched'],
+            'pattern': match_result.get('pattern'),
+            'match_type': match_result.get('match_type')
+        })
+    else:
+        # storeフィールドがない場合はデフォルト値を設定
+        default = mapping_data['default']
+        enriched_record.update({
+            'category': default['category'],
+            'column': default['column'],
+            'matched': False,
+            'pattern': None,
+            'match_type': None
+        })
+
+    return enriched_record
 
 
 def determine_categories_batch(
@@ -823,37 +917,5 @@ def determine_categories_batch(
     if not records:
         return []
 
-    # カテゴリ情報を付与したレコードのリスト
-    enriched_records: List[Dict] = []
-
-    # 1. 各レコードをループ処理
-    for record in records:
-        # 元のレコードをコピー（元データを保持）
-        enriched_record = record.copy()
-
-        # 2. storeフィールドが存在する場合のみカテゴリ判定
-        if 'store' in record:
-            store_name = record['store']
-
-            # 3. カテゴリ判定を実行
-            match_result = determine_category(store_name, mapping_data)
-
-            # 4. 判定結果をレコードに追加
-            enriched_record['category'] = match_result['category']
-            enriched_record['column'] = match_result['column']
-            enriched_record['matched'] = match_result['matched']
-            enriched_record['pattern'] = match_result.get('pattern')
-            enriched_record['match_type'] = match_result.get('match_type')
-        else:
-            # storeフィールドがない場合はデフォルト値を設定
-            default = mapping_data['default']
-            enriched_record['category'] = default['category']
-            enriched_record['column'] = default['column']
-            enriched_record['matched'] = False
-            enriched_record['pattern'] = None
-            enriched_record['match_type'] = None
-
-        # リストに追加
-        enriched_records.append(enriched_record)
-
-    return enriched_records
+    # 各レコードにカテゴリ情報を付与
+    return [_enrich_record_with_category(record, mapping_data) for record in records]
