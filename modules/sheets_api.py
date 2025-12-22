@@ -20,15 +20,25 @@ Google Sheets API連携モジュール
     # 3. 年シート取得
     >>> worksheet = get_year_sheet(spreadsheet, 2025)
 
-    # 4. セル更新
+    # 4. セル更新（個別）
     >>> row = get_month_row(8)  # 8月 → 11行目
     >>> col = get_column_index('C')  # C列 → 3
-    >>> new_value = update_cell_value(worksheet, row, col, 5780)
+    >>> result = update_cell_value(worksheet, row, col, 5780)
+
+    # 5. バッチ更新（複数セル）
+    >>> updates = [
+    ...     {'month': 8, 'column_letter': 'C', 'amount': 5780.0, 'add_mode': True},
+    ...     {'month': 8, 'column_letter': 'D', 'amount': 3200.0, 'add_mode': True},
+    ...     {'month': 9, 'column_letter': 'C', 'amount': 4500.0, 'add_mode': True}
+    ... ]
+    >>> result = batch_update_cells(worksheet, updates)
 """
 
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, List, Dict, Callable
 from pathlib import Path
+import time
+from functools import wraps
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Spreadsheet, Worksheet
@@ -520,3 +530,250 @@ def update_cell_value(
             f"セル更新に失敗しました: 行={row}, 列={column}",
             details={'row': row, 'column': column, 'amount': amount, 'error': str(e)}
         )
+
+
+# ==================== Phase 3: バッチ処理 ====================
+
+def batch_update_cells(
+    worksheet: Worksheet,
+    updates: List[Dict]
+) -> Dict:
+    """
+    複数セルを一括更新する（APIコール数削減）
+
+    バッチ更新により、Google Sheets APIのレート制限を考慮しながら
+    複数セルを効率的に更新します。
+
+    Args:
+        worksheet: ワークシートオブジェクト
+        updates: 更新情報のリスト
+            各要素は以下の辞書:
+            {
+                'month': int,           # 月番号（1～12）
+                'column_letter': str,   # 列名（B～V）
+                'amount': float,        # 金額
+                'add_mode': bool        # True=加算、False=上書き（デフォルト: True）
+            }
+
+    Returns:
+        dict: バッチ更新結果
+            {
+                'total_updates': int,           # 総更新件数
+                'successful_updates': int,       # 成功件数
+                'failed_updates': int,           # 失敗件数
+                'update_details': list[dict],    # 各更新の詳細結果
+                'errors': list[dict]             # エラー情報
+            }
+
+    Raises:
+        CellUpdateError: バッチ更新全体が失敗した場合
+
+    Example:
+        >>> updates = [
+        ...     {'month': 8, 'column_letter': 'C', 'amount': 5780.0, 'add_mode': True},
+        ...     {'month': 8, 'column_letter': 'D', 'amount': 3200.0, 'add_mode': True},
+        ...     {'month': 9, 'column_letter': 'C', 'amount': 4500.0, 'add_mode': True}
+        ... ]
+        >>> result = batch_update_cells(worksheet, updates)
+        >>> print(result['successful_updates'])
+        3
+    """
+    # 入力バリデーション
+    if not updates:
+        logger.warning("[BATCH:START] 更新データが空です")
+        return {
+            'total_updates': 0,
+            'successful_updates': 0,
+            'failed_updates': 0,
+            'update_details': [],
+            'errors': []
+        }
+
+    # バッチサイズチェック
+    total_updates = len(updates)
+    if total_updates > MAX_BATCH_SIZE:
+        logger.warning(
+            f"[BATCH:START] バッチサイズが最大値を超えています: {total_updates}件 "
+            f"（最大: {MAX_BATCH_SIZE}件）"
+        )
+
+    # 結果集計用の変数初期化
+    successful_updates = 0
+    failed_updates = 0
+    update_details = []
+    errors = []
+
+    logger.info(f"[BATCH:START] バッチ更新開始: {total_updates}件")
+
+    # 各更新をループ処理
+    for idx, update in enumerate(updates, start=1):
+        try:
+            # 必須フィールドの検証
+            if 'month' not in update or 'column_letter' not in update or 'amount' not in update:
+                error_msg = f"更新データに必須フィールドがありません: {update}"
+                logger.error(f"[BATCH:ERROR] {error_msg}")
+                failed_updates += 1
+                errors.append({
+                    'index': idx,
+                    'update': update,
+                    'error': error_msg
+                })
+                continue
+
+            # add_modeのデフォルト値設定
+            add_mode = update.get('add_mode', True)
+
+            # monthからrowを計算
+            row = get_month_row(update['month'])
+
+            # column_letterからcolumnを計算
+            column = get_column_index(update['column_letter'])
+
+            # セル更新
+            result = update_cell_value(
+                worksheet=worksheet,
+                row=row,
+                column=column,
+                amount=update['amount'],
+                add_mode=add_mode
+            )
+
+            # 成功時の処理
+            successful_updates += 1
+            update_details.append({
+                'index': idx,
+                'month': update['month'],
+                'column_letter': update['column_letter'],
+                'row': row,
+                'column': column,
+                'old_value': result['old_value'],
+                'new_value': result['new_value'],
+                'added_amount': result['added_amount']
+            })
+
+            # レート制限対応
+            _apply_rate_limit()
+
+        except (ValueError, CellUpdateError) as e:
+            # 失敗時の処理（エラーでも処理継続）
+            failed_updates += 1
+            error_info = {
+                'index': idx,
+                'update': update,
+                'error': str(e)
+            }
+            errors.append(error_info)
+            logger.error(
+                f"[BATCH:ERROR] セル更新失敗（{idx}/{total_updates}）: "
+                f"month={update.get('month')}, column={update.get('column_letter')}, "
+                f"エラー={str(e)}"
+            )
+
+        except Exception as e:
+            # 予期しないエラー
+            failed_updates += 1
+            error_info = {
+                'index': idx,
+                'update': update,
+                'error': f"予期しないエラー: {str(e)}"
+            }
+            errors.append(error_info)
+            logger.error(
+                f"[BATCH:ERROR] 予期しないエラー（{idx}/{total_updates}）: {str(e)}"
+            )
+
+    # 結果ログ記録
+    logger.info(
+        f"[BATCH:UPDATE] バッチ更新完了: 総件数={total_updates}, "
+        f"成功={successful_updates}, 失敗={failed_updates}"
+    )
+
+    # 結果辞書を作成
+    result = {
+        'total_updates': total_updates,
+        'successful_updates': successful_updates,
+        'failed_updates': failed_updates,
+        'update_details': update_details,
+        'errors': errors
+    }
+
+    return result
+
+
+def _apply_rate_limit() -> None:
+    """
+    APIレート制限対応のための待機処理
+
+    Google Sheets APIのレート制限（60リクエスト/分）を考慮し、
+    適切な間隔で待機します。
+
+    待機時間: RATE_LIMIT_WAIT秒（デフォルト: 1.0秒）
+
+    Returns:
+        None
+
+    Example:
+        >>> _apply_rate_limit()  # 1秒待機
+    """
+    time.sleep(RATE_LIMIT_WAIT)
+    logger.debug(f"[RATE:LIMIT] APIレート制限対応: {RATE_LIMIT_WAIT}秒待機")
+
+
+def _retry_on_api_error(max_retries: int = MAX_RETRIES) -> Callable:
+    """
+    APIエラー時のリトライ処理を行うデコレータ
+
+    gspread.exceptions.APIErrorが発生した場合、指定回数までリトライします。
+    各リトライ間には指数バックオフ（1秒、2秒、4秒...）の待機時間を設けます。
+
+    Args:
+        max_retries: 最大リトライ回数（デフォルト: MAX_RETRIES=3）
+
+    Returns:
+        デコレータ関数
+
+    Example:
+        >>> @_retry_on_api_error(max_retries=3)
+        ... def some_api_call():
+        ...     # API呼び出し処理
+        ...     pass
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception = None
+
+            for retry_count in range(max_retries):
+                try:
+                    # 関数を実行
+                    return func(*args, **kwargs)
+
+                except gspread.exceptions.APIError as e:
+                    # APIエラーをキャッチ
+                    last_exception = e
+
+                    # 最終リトライの場合は再送出
+                    if retry_count == max_retries - 1:
+                        logger.error(
+                            f"[RETRY:FAILED] 最大リトライ回数に到達: {max_retries}回"
+                        )
+                        raise
+
+                    # 指数バックオフで待機時間を計算
+                    wait_time = 2 ** retry_count
+
+                    # リトライログ
+                    logger.warning(
+                        f"[RETRY] APIエラー発生、リトライ {retry_count + 1}/{max_retries}: "
+                        f"{str(e)}, {wait_time}秒後に再試行"
+                    )
+
+                    # 待機
+                    time.sleep(wait_time)
+
+            # このコードには到達しないはずだが、念のため
+            if last_exception:
+                raise last_exception
+
+        return wrapper
+    return decorator
