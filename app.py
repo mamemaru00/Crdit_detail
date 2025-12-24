@@ -198,6 +198,188 @@ def result():
     return render_template('result.html', result=result_data)
 
 
+# ==================== CSVアップロード機能 ====================
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    """
+    CSVファイルをアップロードして一時保存
+
+    Request:
+        - files['csv_file']: アップロードされたCSVファイル
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'filename': str,
+                'file_path': str,
+                'file_size': int
+            },
+            'message': str
+        }
+
+    Raises:
+        400: ファイルが送信されていない、拡張子不正、サイズ超過
+        500: ファイル保存エラー
+    """
+    logger.info("CSVファイルアップロード処理を開始")
+
+    try:
+        # 1. ファイルの存在確認
+        if 'csv_file' not in request.files:
+            logger.warning("ファイルが送信されていません")
+            return jsonify(create_response(
+                'error',
+                message='ファイルが選択されていません'
+            )), 400
+
+        file = request.files['csv_file']
+
+        # 2. ファイル名の確認
+        if file.filename == '':
+            logger.warning("ファイル名が空です")
+            return jsonify(create_response(
+                'error',
+                message='ファイルが選択されていません'
+            )), 400
+
+        # 3. 拡張子チェック
+        if not allowed_file(file.filename):
+            logger.warning(f"許可されていない拡張子: {file.filename}")
+            return jsonify(create_response(
+                'error',
+                message='CSVファイルのみアップロード可能です'
+            )), 400
+
+        # 4. ファイル名のサニタイズ
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_filename = f"{timestamp}_{filename}"
+
+        # 5. ファイル保存
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+        file.save(file_path)
+
+        # 6. ファイルサイズ取得
+        file_size = os.path.getsize(file_path)
+
+        # 7. セッションにファイルパスを保存
+        session['uploaded_file_path'] = file_path
+        session['uploaded_filename'] = filename
+
+        logger.info(f"ファイルアップロード成功: {safe_filename} ({file_size} bytes)")
+
+        # 8. 古いファイルのクリーンアップ（非同期的に実行）
+        cleanup_old_files(app.config['UPLOAD_FOLDER'])
+
+        return jsonify(create_response(
+            'success',
+            data={
+                'filename': filename,
+                'file_path': file_path,
+                'file_size': file_size
+            },
+            message='ファイルのアップロードに成功しました'
+        ))
+
+    except Exception as e:
+        logger.error(f"ファイルアップロード中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'ファイルのアップロードに失敗しました: {str(e)}'
+        )), 500
+
+
+@app.route('/preview', methods=['POST'])
+def preview():
+    """
+    アップロードされたCSVファイルのプレビューを取得
+
+    セッションから前回アップロードされたファイルパスを取得し、
+    CSV処理モジュールを使用して先頭5件のデータを返します。
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'preview': List[Dict],  # 先頭5件
+                'total_count': int,
+                'total_amount': int,
+                'date_range': {
+                    'start': str,
+                    'end': str
+                }
+            },
+            'message': str
+        }
+
+    Raises:
+        400: ファイル未アップロード、ファイルが存在しない
+        500: CSV処理エラー
+    """
+    logger.info("CSVプレビュー取得処理を開始")
+
+    try:
+        # 1. セッションからファイルパス取得
+        file_path = session.get('uploaded_file_path')
+
+        if not file_path:
+            logger.warning("ファイルがアップロードされていません")
+            return jsonify(create_response(
+                'error',
+                message='先にファイルをアップロードしてください'
+            )), 400
+
+        # 2. ファイルの存在確認
+        if not os.path.exists(file_path):
+            logger.error(f"ファイルが見つかりません: {file_path}")
+            return jsonify(create_response(
+                'error',
+                message='アップロードされたファイルが見つかりません'
+            )), 400
+
+        # 3. CSV処理モジュールを使用してデータ取得
+        result = csv_processor.process_csv_file(
+            file_path,
+            allowed_dir=app.config['UPLOAD_FOLDER']
+        )
+
+        logger.info(
+            f"CSVプレビュー取得成功: "
+            f"{result['total_count']}件, "
+            f"合計{result['summary']['total_amount']:,}円"
+        )
+
+        # 4. セッションに全データを保存（後続のprocess処理用）
+        session['csv_data'] = result['details']
+
+        return jsonify(create_response(
+            'success',
+            data={
+                'preview': result['preview'],
+                'total_count': result['total_count'],
+                'total_amount': result['summary']['total_amount'],
+                'date_range': result['summary']['date_range']
+            },
+            message=f'{result["total_count"]}件の明細データを読み込みました'
+        ))
+
+    except csv_processor.CSVProcessingError as e:
+        logger.error(f"CSV処理エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'CSVファイルの処理に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"プレビュー取得中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'プレビュー取得に失敗しました: {str(e)}'
+        )), 500
+
+
 # ==================== アプリケーション起動 ====================
 
 if __name__ == '__main__':
