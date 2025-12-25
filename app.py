@@ -380,6 +380,200 @@ def preview():
         )), 500
 
 
+@app.route('/process', methods=['POST'])
+def process():
+    """
+    CSVデータを処理してGoogle Sheetsに反映
+
+    Request JSON:
+        {
+            'spreadsheet_id': str,
+            'target_year': int
+        }
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'summary': {
+                    'total_amount': int,
+                    'total_count': int,
+                    'by_category': Dict[str, Dict],
+                    'by_month': Dict[int, Dict]
+                },
+                'unregistered_stores': List[Dict],
+                'updated_cells': int,
+                'processing_time': float
+            },
+            'message': str
+        }
+
+    Raises:
+        400: パラメータ不正、CSV未アップロード
+        500: 処理エラー
+    """
+    logger.info("CSV処理・Sheets更新処理を開始")
+    start_time = datetime.now()
+
+    try:
+        # 1. リクエストパラメータ取得
+        request_data = request.get_json()
+
+        if not request_data:
+            logger.warning("リクエストボディが空です")
+            return jsonify(create_response(
+                'error',
+                message='リクエストパラメータが不正です'
+            )), 400
+
+        spreadsheet_id = request_data.get('spreadsheet_id')
+        target_year = request_data.get('target_year')
+
+        # 2. パラメータバリデーション
+        if not spreadsheet_id:
+            logger.warning("スプレッドシートIDが指定されていません")
+            return jsonify(create_response(
+                'error',
+                message='スプレッドシートIDを指定してください'
+            )), 400
+
+        if not target_year or not isinstance(target_year, int):
+            logger.warning(f"対象年が不正です: {target_year}")
+            return jsonify(create_response(
+                'error',
+                message='対象年を正しく指定してください'
+            )), 400
+
+        # 3. セッションからCSVデータ取得
+        csv_data = session.get('csv_data')
+
+        if not csv_data:
+            logger.warning("CSVデータがセッションに存在しません")
+            return jsonify(create_response(
+                'error',
+                message='先にCSVファイルをプレビューしてください'
+            )), 400
+
+        logger.info(f"処理対象: {len(csv_data)}件, スプレッドシートID: {spreadsheet_id}, 対象年: {target_year}")
+
+        # 4. マッピングデータ読み込み
+        mapping_data = category_logic.load_mapping_data(app.config['MAPPING_FILE'])
+
+        # 5. カテゴリ判定（バッチ処理）
+        enriched_data = category_logic.determine_categories_batch(csv_data, mapping_data)
+
+        # 6. 未登録店舗検出
+        unregistered_stores = category_logic.detect_unregistered_stores(csv_data, mapping_data)
+
+        logger.info(f"カテゴリ判定完了: 未登録店舗 {len(unregistered_stores)}件")
+
+        # 7. Google Sheets認証・接続
+        client = sheets_api.authenticate(Path(app.config['SERVICE_ACCOUNT_FILE']))
+        spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
+        worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
+
+        logger.info(f"Googleスプレッドシート接続成功: {target_year}年シート")
+
+        # 8. 更新データの集計（月・カテゴリ別）
+        updates = []
+        category_summary = {}
+        month_summary = {}
+
+        for record in enriched_data:
+            month = record['month']
+            category = record.get('category', DEFAULT_CATEGORY)
+            column = record.get('column', DEFAULT_COLUMN)
+            amount = record['amount']
+
+            # バッチ更新用データ
+            updates.append({
+                'month': month,
+                'column_letter': column,
+                'amount': float(amount),
+                'add_mode': True  # 加算モード
+            })
+
+            # カテゴリ別サマリー
+            if category not in category_summary:
+                category_summary[category] = {
+                    'amount': 0,
+                    'count': 0,
+                    'column': column
+                }
+            category_summary[category]['amount'] += amount
+            category_summary[category]['count'] += 1
+
+            # 月別サマリー
+            if month not in month_summary:
+                month_summary[month] = {
+                    'amount': 0,
+                    'count': 0
+                }
+            month_summary[month]['amount'] += amount
+            month_summary[month]['count'] += 1
+
+        # 9. バッチ更新実行
+        batch_result = sheets_api.batch_update_cells(worksheet, updates)
+
+        logger.info(f"セル更新完了: {batch_result['updated_cells']}セル")
+
+        # 10. 処理結果サマリー作成
+        total_amount = sum(r['amount'] for r in enriched_data)
+        total_count = len(enriched_data)
+        processing_time = (datetime.now() - start_time).total_seconds()
+
+        result_data = {
+            'summary': {
+                'total_amount': total_amount,
+                'total_count': total_count,
+                'by_category': category_summary,
+                'by_month': month_summary
+            },
+            'unregistered_stores': unregistered_stores,
+            'updated_cells': batch_result['updated_cells'],
+            'processing_time': processing_time,
+            'spreadsheet_id': spreadsheet_id,
+            'target_year': target_year
+        }
+
+        # 11. セッションに処理結果を保存
+        session['process_result'] = result_data
+
+        logger.info(
+            f"CSV処理完了: "
+            f"{total_count}件, "
+            f"合計{total_amount:,}円, "
+            f"処理時間{processing_time:.2f}秒"
+        )
+
+        return jsonify(create_response(
+            'success',
+            data=result_data,
+            message=f'{total_count}件の処理が完了しました'
+        ))
+
+    except category_logic.CategoryLogicError as e:
+        logger.error(f"カテゴリ判定エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'カテゴリ判定に失敗しました: {e.message}'
+        )), 500
+
+    except sheets_api.SheetsAPIError as e:
+        logger.error(f"Google Sheets APIエラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'スプレッドシート更新に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"CSV処理中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'処理に失敗しました: {str(e)}'
+        )), 500
+
+
 # ==================== アプリケーション起動 ====================
 
 if __name__ == '__main__':
