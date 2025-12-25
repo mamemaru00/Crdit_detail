@@ -574,6 +574,295 @@ def process():
         )), 500
 
 
+# ==================== マッピング管理API ====================
+
+@app.route('/mapping/list', methods=['GET'])
+def mapping_list():
+    """
+    全マッピングエントリを取得
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'mappings': List[MappingEntry],
+                'count': int
+            },
+            'message': str
+        }
+
+    Raises:
+        500: マッピング取得エラー
+    """
+    logger.info("マッピング一覧取得処理を開始")
+
+    try:
+        # マッピングファイルの存在確認
+        if not os.path.exists(app.config['MAPPING_FILE']):
+            logger.warning(f"マッピングファイルが見つかりません: {app.config['MAPPING_FILE']}")
+            return jsonify(create_response(
+                'success',
+                data={
+                    'mappings': [],
+                    'count': 0
+                },
+                message='マッピングファイルが存在しないため、空のリストを返します'
+            ))
+
+        # マッピングマネージャーを使用して全件取得
+        mappings = mapping_manager.load_mappings(app.config['MAPPING_FILE'])
+
+        logger.info(f"マッピング一覧取得成功: {len(mappings)}件")
+
+        return jsonify(create_response(
+            'success',
+            data={
+                'mappings': mappings,
+                'count': len(mappings)
+            },
+            message=f'{len(mappings)}件のマッピングを取得しました'
+        ))
+
+    except mapping_manager.MappingManagerError as e:
+        logger.error(f"マッピング取得エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピング一覧の取得に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"マッピング一覧取得中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピング一覧の取得に失敗しました: {str(e)}'
+        )), 500
+
+
+@app.route('/mapping/add', methods=['POST'])
+def mapping_add():
+    """
+    新規マッピングを追加
+
+    Request JSON:
+        {
+            'store_name': str,      # 店舗名パターン
+            'category': str,        # カテゴリ名
+            'column': str,          # 列記号（A-Z）
+            'match_type': str       # マッチタイプ（exact, prefix, partial）
+        }
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'mapping': MappingEntry
+            },
+            'message': str
+        }
+
+    Raises:
+        400: パラメータ不正、重複エラー
+        500: 追加処理エラー
+    """
+    logger.info("マッピング追加処理を開始")
+
+    try:
+        # 1. リクエストデータ取得
+        request_data = request.get_json()
+
+        if not request_data:
+            logger.warning("リクエストボディが空です")
+            return jsonify(create_response(
+                'error',
+                message='リクエストパラメータが不正です'
+            )), 400
+
+        # 2. 必須フィールドの確認
+        required_fields = ['store_name', 'category', 'column', 'match_type']
+        missing_fields = [f for f in required_fields if f not in request_data or not request_data[f]]
+
+        if missing_fields:
+            logger.warning(f"必須フィールド不足: {missing_fields}")
+            return jsonify(create_response(
+                'error',
+                message=f'必須フィールドが不足しています: {", ".join(missing_fields)}'
+            )), 400
+
+        # 3. マッピング追加
+        added_mapping = mapping_manager.add_mapping(request_data)
+
+        logger.info(
+            f"マッピング追加成功: "
+            f"ID={added_mapping['id']}, "
+            f"store_name={added_mapping['store_name']}, "
+            f"category={added_mapping['category']}"
+        )
+
+        return jsonify(create_response(
+            'success',
+            data={'mapping': added_mapping},
+            message='マッピングを追加しました'
+        ))
+
+    except mapping_manager.DuplicateMappingError as e:
+        logger.warning(f"マッピング重複エラー: {e.message}")
+        return jsonify(create_response(
+            'error',
+            message='同じ店舗名とマッチタイプの組み合わせが既に存在します'
+        )), 400
+
+    except mapping_manager.MappingManagerError as e:
+        logger.error(f"マッピング追加エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの追加に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"マッピング追加中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの追加に失敗しました: {str(e)}'
+        )), 500
+
+
+@app.route('/mapping/edit/<int:mapping_id>', methods=['PUT'])
+def mapping_edit(mapping_id: int):
+    """
+    既存マッピングを更新
+
+    Args:
+        mapping_id (int): マッピングID
+
+    Request JSON:
+        {
+            'store_name': str (optional),
+            'category': str (optional),
+            'column': str (optional),
+            'match_type': str (optional)
+        }
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'mapping': MappingEntry
+            },
+            'message': str
+        }
+
+    Raises:
+        400: パラメータ不正
+        404: マッピングが見つからない
+        500: 更新処理エラー
+    """
+    logger.info(f"マッピング更新処理を開始: ID={mapping_id}")
+
+    try:
+        # 1. リクエストデータ取得
+        request_data = request.get_json()
+
+        if not request_data:
+            logger.warning("リクエストボディが空です")
+            return jsonify(create_response(
+                'error',
+                message='更新データが指定されていません'
+            )), 400
+
+        # 2. マッピング更新
+        updated_mapping = mapping_manager.update_mapping(mapping_id, request_data)
+
+        logger.info(
+            f"マッピング更新成功: "
+            f"ID={updated_mapping['id']}, "
+            f"store_name={updated_mapping['store_name']}"
+        )
+
+        return jsonify(create_response(
+            'success',
+            data={'mapping': updated_mapping},
+            message='マッピングを更新しました'
+        ))
+
+    except mapping_manager.MappingNotFoundError as e:
+        logger.warning(f"マッピングが見つかりません: ID={mapping_id}")
+        return jsonify(create_response(
+            'error',
+            message=f'指定されたマッピングが見つかりません: ID={mapping_id}'
+        )), 404
+
+    except mapping_manager.MappingManagerError as e:
+        logger.error(f"マッピング更新エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの更新に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"マッピング更新中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの更新に失敗しました: {str(e)}'
+        )), 500
+
+
+@app.route('/mapping/delete/<int:mapping_id>', methods=['DELETE'])
+def mapping_delete(mapping_id: int):
+    """
+    マッピングを削除
+
+    Args:
+        mapping_id (int): マッピングID
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'deleted_id': int
+            },
+            'message': str
+        }
+
+    Raises:
+        404: マッピングが見つからない
+        500: 削除処理エラー
+    """
+    logger.info(f"マッピング削除処理を開始: ID={mapping_id}")
+
+    try:
+        # マッピング削除
+        result = mapping_manager.delete_mapping(mapping_id)
+
+        logger.info(f"マッピング削除成功: ID={mapping_id}")
+
+        return jsonify(create_response(
+            'success',
+            data={'deleted_id': mapping_id},
+            message='マッピングを削除しました'
+        ))
+
+    except mapping_manager.MappingNotFoundError as e:
+        logger.warning(f"マッピングが見つかりません: ID={mapping_id}")
+        return jsonify(create_response(
+            'error',
+            message=f'指定されたマッピングが見つかりません: ID={mapping_id}'
+        )), 404
+
+    except mapping_manager.MappingManagerError as e:
+        logger.error(f"マッピング削除エラー: {e.message}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの削除に失敗しました: {e.message}'
+        )), 500
+
+    except Exception as e:
+        logger.error(f"マッピング削除中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'マッピングの削除に失敗しました: {str(e)}'
+        )), 500
+
+
 # ==================== アプリケーション起動 ====================
 
 if __name__ == '__main__':
