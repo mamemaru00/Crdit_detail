@@ -610,7 +610,7 @@ def mapping_list():
             ))
 
         # マッピングマネージャーを使用して全件取得
-        mappings = mapping_manager.load_mappings(app.config['MAPPING_FILE'])
+        mappings = mapping_manager.get_all_mappings()
 
         logger.info(f"マッピング一覧取得成功: {len(mappings)}件")
 
