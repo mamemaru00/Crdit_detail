@@ -863,6 +863,150 @@ def mapping_delete(mapping_id: int):
         )), 500
 
 
+# ==================== エラーハンドリング・クリーンアップ ====================
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """
+    404エラーハンドラー
+
+    Args:
+        error: エラーオブジェクト
+
+    Returns:
+        JSON: エラーレスポンス
+    """
+    logger.warning(f"404エラー: {request.url}")
+
+    return jsonify(create_response(
+        'error',
+        message='指定されたリソースが見つかりません'
+    )), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """
+    500エラーハンドラー
+
+    Args:
+        error: エラーオブジェクト
+
+    Returns:
+        JSON: エラーレスポンス
+    """
+    logger.error(f"500エラー: {str(error)}", exc_info=True)
+
+    return jsonify(create_response(
+        'error',
+        message='サーバー内部エラーが発生しました'
+    )), 500
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """
+    413エラーハンドラー（ファイルサイズ超過）
+
+    Args:
+        error: エラーオブジェクト
+
+    Returns:
+        JSON: エラーレスポンス
+    """
+    logger.warning("ファイルサイズが上限を超えています")
+
+    max_size_mb = app.config['MAX_CONTENT_LENGTH'] / (1024 * 1024)
+
+    return jsonify(create_response(
+        'error',
+        message=f'ファイルサイズが上限({max_size_mb:.0f}MB)を超えています'
+    )), 413
+
+
+@app.route('/clear_session', methods=['POST'])
+def clear_session():
+    """
+    セッションをクリアする
+
+    アップロードされたファイルを削除し、セッションデータをクリアします。
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'message': str
+        }
+    """
+    logger.info("セッションクリア処理を開始")
+
+    try:
+        # アップロードファイルの削除
+        file_path = session.get('uploaded_file_path')
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+            logger.info(f"アップロードファイルを削除: {file_path}")
+
+        # セッションクリア
+        session.clear()
+
+        logger.info("セッションクリア完了")
+
+        return jsonify(create_response(
+            'success',
+            message='セッションをクリアしました'
+        ))
+
+    except Exception as e:
+        logger.error(f"セッションクリア中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'セッションのクリアに失敗しました: {str(e)}'
+        )), 500
+
+
+@app.route('/download/log', methods=['GET'])
+def download_log():
+    """
+    処理ログをダウンロード
+
+    Returns:
+        file: ログファイル（text/plain）
+
+    Raises:
+        404: ログファイルが存在しない
+        500: ファイル送信エラー
+    """
+    logger.info("ログダウンロード処理を開始")
+
+    try:
+        # ログファイルの存在確認
+        log_file_path = app.config['LOG_FILE']
+
+        if not os.path.exists(log_file_path):
+            logger.warning(f"ログファイルが見つかりません: {log_file_path}")
+            return jsonify(create_response(
+                'error',
+                message='ログファイルが存在しません'
+            )), 404
+
+        logger.info(f"ログファイル送信: {log_file_path}")
+
+        # ファイル送信
+        return send_file(
+            log_file_path,
+            mimetype='text/plain',
+            as_attachment=True,
+            download_name=f'app_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
+        )
+
+    except Exception as e:
+        logger.error(f"ログダウンロード中にエラーが発生: {str(e)}", exc_info=True)
+        return jsonify(create_response(
+            'error',
+            message=f'ログのダウンロードに失敗しました: {str(e)}'
+        )), 500
+
+
 # ==================== アプリケーション起動 ====================
 
 if __name__ == '__main__':
