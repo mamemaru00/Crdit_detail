@@ -28,6 +28,15 @@ DETAIL_START_ROW = 8  # 明細データ開始行(0インデックス)
 DATE_PATTERN = r'^\d{6}$'  # 6桁数字パターン(YYMMDD)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 最大ファイルサイズ 10MB
 
+# CSV列インデックス定数（イオンカード明細CSVのフォーマット）
+COL_DATE = 0           # 利用日（YYMMDD形式）
+COL_USER = 1           # 利用者区分
+COL_STORE = 2          # 利用先（店舗名）
+COL_PAYMENT_METHOD = 3 # 支払方法
+COL_AMOUNT = 6         # 利用金額
+COL_NOTE_PRIMARY = 7   # 備考（第1候補）
+COL_NOTE_SECONDARY = 8 # 備考（第2候補）
+
 
 # ==================== カスタム例外クラス ====================
 
@@ -423,12 +432,12 @@ def is_detail_row(row: pd.Series) -> bool:
         - DATE_PATTERN = r'^\d{6}$' (6桁数字)
         - 空白の前後も除去して判定
     """
-    # 列0が存在しない場合
-    if len(row) == 0 or 0 not in row.index:
+    # 利用日列（COL_DATE）が存在しない場合
+    if len(row) == 0 or COL_DATE not in row.index:
         return False
 
-    # 列0の値を取得
-    value = row[0]
+    # 利用日列の値を取得
+    value = row[COL_DATE]
 
     # None や NaN の場合
     if pd.isna(value):
@@ -516,7 +525,7 @@ def extract_detail_data(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # 必要な列が存在することを確認
-    required_columns = [0, 1, 2, 3, 6]
+    required_columns = [COL_DATE, COL_USER, COL_STORE, COL_PAYMENT_METHOD, COL_AMOUNT]
     missing_columns = [col for col in required_columns if col not in df_filtered.columns]
 
     if missing_columns:
@@ -529,27 +538,27 @@ def extract_detail_data(df: pd.DataFrame) -> pd.DataFrame:
             }
         )
 
-    # 基本フィールド(列0, 1, 2, 3, 6)を抽出
-    detail_df = df_filtered[[0, 1, 2, 3, 6]].copy()
+    # 基本フィールド（利用日、利用者、店舗名、支払方法、金額）を抽出
+    detail_df = df_filtered[[COL_DATE, COL_USER, COL_STORE, COL_PAYMENT_METHOD, COL_AMOUNT]].copy()
 
-    # 備考フィールド(列7または8)を条件付きで追加
-    if 7 in df_filtered.columns:
-        detail_df['note_temp'] = df_filtered[7]
-    elif 8 in df_filtered.columns:
-        detail_df['note_temp'] = df_filtered[8]
+    # 備考フィールド（第1候補または第2候補）を条件付きで追加
+    if COL_NOTE_PRIMARY in df_filtered.columns:
+        detail_df['note_temp'] = df_filtered[COL_NOTE_PRIMARY]
+    elif COL_NOTE_SECONDARY in df_filtered.columns:
+        detail_df['note_temp'] = df_filtered[COL_NOTE_SECONDARY]
     else:
         detail_df['note_temp'] = ""
 
-    # 金額列(インデックス6)のカンマを除去
-    detail_df.loc[:, 6] = detail_df[6].str.replace(',', '', regex=False).str.replace('、', '', regex=False)
+    # 金額列のカンマを除去（半角・全角対応）
+    detail_df.loc[:, COL_AMOUNT] = detail_df[COL_AMOUNT].str.replace(',', '', regex=False).str.replace('、', '', regex=False)
 
     # 金額が数値に変換可能か検証
     try:
         # 一時的にfloat変換して検証(実際の変換は後続処理で行う)
-        pd.to_numeric(detail_df[6], errors='raise')
+        pd.to_numeric(detail_df[COL_AMOUNT], errors='raise')
     except (ValueError, TypeError) as e:
         # 変換できない値を特定
-        invalid_values = detail_df[~detail_df[6].str.match(r'^-?\d+(\.\d+)?$', na=False)][6].unique()
+        invalid_values = detail_df[~detail_df[COL_AMOUNT].str.match(r'^-?\d+(\.\d+)?$', na=False)][COL_AMOUNT].unique()
         raise DataExtractionError(
             f"金額列に数値変換できない値が含まれています: {invalid_values.tolist()}",
             details={
