@@ -577,27 +577,175 @@
 - [ ] 大容量ファイル（10MB）テスト
 
 ## Phase 5: Docker化
+**完了日時**: 2025-12-27（Phase 1-3完了）、Phase 4一部実施中
 
 ### Step 5.1: Dockerfile作成
-- [ ] ベースイメージ指定（python:3.10-slim）
-- [ ] 作業ディレクトリ設定
-- [ ] requirements.txtコピー・インストール
-- [ ] アプリケーションコードコピー
-- [ ] ポート5000公開
-- [ ] CMD指定（Gunicorn起動）
+**完了日時**: 2025-12-27
+
+- [x] ベースイメージ指定（python:3.12-slim-bookworm）
+  - [x] Python 3.12使用（LTS 2028年まで）
+  - [x] Debian 12 Bookwormベース
+- [x] 作業ディレクトリ設定（/app）
+- [x] システムパッケージインストール（curl）
+- [x] requirements.txtコピー・インストール
+- [x] アプリケーションコードコピー
+- [x] ディレクトリ作成（uploads/, logs/, config/）
+- [x] 非rootユーザー作成（appuser, UID 1000）
+  - [x] セキュリティ強化
+  - [x] 適切なパーミッション設定
+- [x] ヘルスチェック設定
+  - [x] curl -f http://localhost:5000/
+  - [x] interval: 30s, timeout: 10s
+  - [x] start-period: 60s（Gunicorn起動待機）
+  - [x] retries: 3
+- [x] ポート5000公開
+- [x] CMD指定（Gunicorn起動）
+  - [x] 4ワーカー
+  - [x] 120秒タイムアウト
+  - [x] 0.0.0.0:5000でリッスン
+
+#### Dockerfile実装詳細
+- **ベースイメージ**: python:3.12-slim-bookworm
+- **実装行数**: 54行
+- **セキュリティ**: 非rootユーザー実行、.dockerignoreによる機密情報除外
+- **ヘルスチェック**: 60秒start-period、30秒interval
 
 ### Step 5.2: docker-compose.yml作成
-- [ ] サービス定義（web）
-- [ ] ビルド設定
-- [ ] ポートマッピング（5000:5000）
-- [ ] ボリュームマウント（config/, uploads/）
-- [ ] 環境変数設定
+**完了日時**: 2025-12-27
 
-### Step 5.3: Docker動作確認
-- [ ] イメージビルド（`docker-compose build`）
-- [ ] コンテナ起動（`docker-compose up`）
+- [x] サービス定義（web）
+- [x] ビルド設定
+  - [x] context: .
+  - [x] dockerfile: Dockerfile
+- [x] コンテナ名設定（aeon-card-import-system）
+- [x] ポートマッピング（5000:5000）
+- [x] ボリュームマウント（4種類）
+  - [x] config/（読み取り専用、認証情報）
+  - [x] data/（読み書き可能、mapping.json、backups/）
+  - [x] uploads/（読み書き可能、CSVファイル一時保存）
+  - [x] logs/（読み書き可能、ログファイル）
+- [x] 環境変数設定
+  - [x] FLASK_ENV（production）
+  - [x] SECRET_KEY（.envから読込）
+  - [x] SPREADSHEET_ID（.envから読込）
+  - [x] DEFAULT_YEAR（デフォルト2025、.envでオーバーライド可）
+  - [x] LOG_LEVEL（デフォルトINFO、.envでオーバーライド可）
+  - [x] PYTHONUNBUFFERED=1（ログ即時出力）
+- [x] 再起動ポリシー（unless-stopped）
+- [x] ヘルスチェック設定
+- [x] ネットワーク設定（aeon-network）
+
+#### docker-compose.yml実装詳細
+- **バージョン**: 3.8（Compose v2対応）
+- **実装行数**: 54行
+- **12 Factor App準拠**: 環境変数による設定外部化
+- **セキュリティ**: 認証情報読み取り専用、データ分離
+
+### Step 5.3: 関連ファイル作成
+**完了日時**: 2025-12-27
+
+- [x] .dockerignore作成
+  - [x] バージョン管理ファイル除外（.git, .gitignore）
+  - [x] Python関連除外（__pycache__, venv/）
+  - [x] テスト関連除外（tests/, .pytest_cache/）
+  - [x] IDE設定除外（.vscode/, .idea/）
+  - [x] 機密情報除外（config/service_account.json, .env）
+  - [x] ドキュメント除外（*.md, .claude/, report/）
+- [x] .env.example作成
+  - [x] FLASK_ENV設定例
+  - [x] SECRET_KEY設定例
+  - [x] SPREADSHEET_ID設定例
+  - [x] DEFAULT_YEAR設定例
+  - [x] LOG_LEVEL設定例
+- [x] .env作成（実際の運用環境用）
+  - [x] ランダムSECRET_KEY生成（64文字）
+  - [x] 環境変数テンプレート設定
+
+### Step 5.4: コード修正（Docker対応）
+**完了日時**: 2025-12-27
+
+- [x] config.py修正
+  - [x] MAPPING_FILE: config/ → data/mapping.json
+  - [x] DEFAULT_YEAR: 環境変数から読込
+  - [x] LOG_LEVEL: 環境変数から読込
+  - [x] LOG_FILE: logs/app.logに修正
+- [x] app.py修正
+  - [x] ディレクトリ自動作成（logs/, data/backups/）
+  - [x] os.makedirs(exist_ok=True)実装
+- [x] modules/category_logic.py修正
+  - [x] DEFAULT_MAPPING_PATH: data/mapping.jsonに変更
+- [x] modules/mapping_manager.py修正
+  - [x] docstring更新（data/mapping.json参照）
+- [x] テストファイル修正（3ファイル、7箇所）
+  - [x] tests/integration/test_category_logic_integration.py
+  - [x] tests/unit/test_category_logic_phase2.py
+  - [x] tests/unit/test_category_logic_phase4.py
+  - [x] config/mapping.json → data/mapping.json
+
+### Step 5.5: Codex MCP検証
+**完了日時**: 2025-12-27
+
+- [x] Phase 2検証（Dockerfile作成）
+  - [x] 初回検証: B-評価（3つの問題検出）
+  - [x] 修正実施: 非rootユーザー追加、ヘルスチェック延長
+  - [x] 再検証: B評価達成
+- [x] Phase 3検証（docker-compose.yml作成）
+  - [x] 初回検証: C評価（3つのCritical問題検出）
+  - [x] 完全修正実施: ディレクトリ再構成、環境変数対応
+  - [x] 再検証: B評価達成
+- [x] 追加改善実施（A-評価を目指す）
+  - [x] テストファイルパス修正
+  - [x] ディレクトリ自動作成
+  - [x] 環境変数最適化
+  - [x] 最終検証: A-評価達成
+
+#### 検証結果
+- **総合評価**: A-
+- **Critical/High問題**: 0件
+- **Medium問題**: 2件（SECRET_KEY必須化、Python版調整）
+- **修正ファイル数**: 11ファイル
+- **修正箇所**: 20+箇所
+
+### Step 5.6: Docker動作確認
+**開始日時**: 2025-12-27（実施中）
+
+- [x] イメージビルド（`docker-compose build`）
+  - [x] 初回ビルド失敗（Python 3.14互換性問題）
+  - [x] Python 3.12-slim-bookwormに変更
+  - [x] 再ビルド成功
+- [x] コンテナ起動（`docker-compose up -d`）
+  - [x] コンテナ起動成功
+  - [x] ヘルスチェック開始
 - [ ] ブラウザアクセステスト（http://localhost:5000）
-- [ ] CSV取込テスト
+  - [x] コンテナ起動確認
+  - [ ] **ブロッカー検出: templates/とstatic/が未実装**
+    - TemplateNotFound: index.html エラー発生
+    - フロントエンド実装が必要（Phase 3未完了）
+- [ ] CSV取込テスト（フロントエンド実装後）
+- [ ] マッピング管理テスト（フロントエンド実装後）
+
+#### 実装状況サマリー
+- **Phase 1-3**: 完了（Dockerfile, docker-compose.yml, 関連ファイル、コード修正）
+- **Phase 4**: 一部実施（ビルド成功、起動成功、フロントエンド未実装により中断）
+- **Codex MCP評価**: A-（2つのMedium改善提案残存）
+- **ブロッカー**: フロントエンド未実装（Phase 3: templates/, static/）
+
+#### 未完了タスク
+- **フロントエンド実装**: Phase 3（Step 3.1～3.6）の実施が必要
+  - templates/base.html
+  - templates/index.html
+  - templates/mapping.html
+  - templates/result.html
+  - static/css/style.css
+  - static/js/main.js
+  - static/js/mapping.js
+
+#### 次のステップ
+1. **Option A（推奨）**: Phase 3フロントエンド実装を完了させる
+   - frontend-implementation-specialistエージェント使用
+   - .claude/04_uiと.claude/07_frontendの仕様に準拠
+2. **Option B**: ダミーテンプレートでDocker検証を継続（一時的）
+3. **Option C**: Phase 5検証レポート作成、フロントエンドは別Phase扱い
 
 ## Phase 6: ドキュメント整備
 

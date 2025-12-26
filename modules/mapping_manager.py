@@ -1,7 +1,7 @@
 """
 マッピング管理モジュール
 
-このモジュールはconfig/mapping.jsonのCRUD操作を提供します。
+このモジュールはdata/mapping.jsonのCRUD操作を提供します。
 
 主な機能:
 - マッピングデータのCRUD操作（追加、読込、更新、削除）
@@ -410,7 +410,7 @@ def _create_backup(file_path: Path) -> None:
         file_path (Path): バックアップ対象のファイルパス
 
     Note:
-        - バックアップは config/backups/ ディレクトリに保存
+        - バックアップは data/backups/ ディレクトリに保存
         - ファイル名形式: mapping_YYYYMMDD_HHMMSS.json
         - 最新10件を保持、それ以外は自動削除
         - バックアップ失敗時は警告ログのみ（処理は続行）

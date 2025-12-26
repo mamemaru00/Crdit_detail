@@ -85,10 +85,14 @@ coverage.xml
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Docker関連（一部除外）
+# Docker関連
 *.pid
 *.seed
 *.pid.lock
+docker-compose.override.yml
+
+# アプリケーションデータ（バックアップファイル除外）
+data/backups/*.json
 
 # その他
 *.sqlite

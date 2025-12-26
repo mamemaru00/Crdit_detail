@@ -19,7 +19,7 @@ from modules.category_logic import (
 @pytest.fixture
 def mapping_data():
     """テスト用のマッピングデータフィクスチャ"""
-    return load_mapping_data('config/mapping.json')
+    return load_mapping_data('data/mapping.json')
 
 
 class TestDetermineCategory:

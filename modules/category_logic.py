@@ -41,7 +41,7 @@ from typing import TypedDict, List, Optional, Dict
 # ==================== 定数定義 ====================
 
 # ファイルパス
-DEFAULT_MAPPING_PATH = 'config/mapping.json'
+DEFAULT_MAPPING_PATH = 'data/mapping.json'
 
 # マッチタイプ
 MATCH_TYPE_EXACT = 'exact'        # 完全一致
