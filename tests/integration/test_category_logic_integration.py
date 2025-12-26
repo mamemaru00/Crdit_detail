@@ -29,8 +29,8 @@ from modules.category_logic import (
 
 @pytest.fixture
 def real_mapping_data():
-    """実際のconfig/mapping.jsonを読み込む"""
-    return load_mapping_data('config/mapping.json')
+    """実際のdata/mapping.jsonを読み込む"""
+    return load_mapping_data('data/mapping.json')
 
 
 class TestRealMappingDataIntegration:
@@ -45,7 +45,7 @@ class TestRealMappingDataIntegration:
         assert len(real_mapping_data['mappings']) > 0
 
         # マッピングに登録されている店舗名で判定
-        # config/mapping.jsonに"ユシンヤ"が登録されていることを前提
+        # data/mapping.jsonに"ユシンヤ"が登録されていることを前提
         result = determine_category("ユシンヤ", real_mapping_data)
         assert result['matched'] is True
         assert result['category'] is not None

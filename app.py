@@ -42,6 +42,10 @@ app.config.from_object(config[env])
 # アップロードフォルダの作成
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# 必要なディレクトリを自動作成
+os.makedirs(Path(app.config['LOG_FILE']).parent, exist_ok=True)
+os.makedirs('data/backups', exist_ok=True)
+
 # ==================== ロギング設定 ====================
 
 # ロガー設定

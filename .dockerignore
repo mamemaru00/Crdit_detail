@@ -1,0 +1,55 @@
+# バージョン管理
+.git
+.github
+.gitignore
+
+# Python関連
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# テスト関連
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS固有
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# アプリケーション一時ファイル
+uploads/*.csv
+logs/*.log
+*.log
+
+# セキュリティ（イメージに焼き込まない）
+config/service_account.json
+.env
+.env.local
+
+# ドキュメント
+*.md
+!README.md
+.claude/
+report/
+
+# その他
+nul
+*.bak
+*.tmp

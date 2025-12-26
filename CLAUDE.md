@@ -41,20 +41,24 @@ project_root/
 ├── requirements.txt       # 依存パッケージ
 ├── Dockerfile
 ├── docker-compose.yml
+├── .env                   # 環境変数（.gitignore対象）
+├── .env.example           # 環境変数テンプレート
 ├── config/
-│   ├── mapping.json          # カテゴリマッピング
 │   └── service_account.json  # Google認証情報（.gitignore対象）
-├── static/
+├── data/
+│   ├── mapping.json          # カテゴリマッピング
+│   └── backups/              # マッピングバックアップ（.gitignore対象）
+├── static/                   # フロントエンド静的ファイル（未実装）
 │   ├── css/
 │   │   └── style.css     # カスタムCSS
 │   └── js/
 │       ├── main.js       # メイン画面用JS
 │       └── mapping.js    # マッピング管理用JS
-├── templates/
+├── templates/                # Jinja2テンプレート（未実装）
 │   ├── base.html         # ベーステンプレート
 │   ├── index.html        # メイン画面
 │   ├── mapping.html      # マッピング管理画面
-│   └── unregistered.html # 未登録店舗確認画面
+│   └── result.html       # 処理結果画面
 └── modules/
     ├── csv_processor.py  # CSV処理モジュール
     ├── sheets_api.py     # Sheets API連携
@@ -65,7 +69,7 @@ project_root/
 ## Technology Stack
 
 ### Backend
-- **Python**: 3.10+ (推奨 3.14.0)
+- **Python**: 3.10+ (Docker: 3.12-slim-bookworm, LTS 2028年まで)
 - **Flask**: 3.0+ (推奨 3.1.2)
 - **pandas**: 2.0+ (CSV処理・データ操作)
 - **google-api-python-client**: 2.100+ (Google Sheets API連携)

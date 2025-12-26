@@ -17,10 +17,10 @@ class Config:
     SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID') or None
 
     # マッピング設定
-    MAPPING_FILE = os.path.join('config', 'mapping.json')
+    MAPPING_FILE = os.path.join('data', 'mapping.json')
 
     # アプリケーション設定
-    DEFAULT_YEAR = 2025
+    DEFAULT_YEAR = int(os.environ.get('DEFAULT_YEAR', '2025'))
     DEFAULT_COLUMN = 'B'
     CSV_ENCODING = 'Shift_JIS'
 
@@ -29,8 +29,8 @@ class Config:
     BATCH_SIZE = 100
 
     # ログ設定
-    LOG_LEVEL = 'INFO'
-    LOG_FILE = 'app.log'
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+    LOG_FILE = os.path.join('logs', 'app.log')
 
     # セキュリティ設定
     AUTO_DELETE_UPLOADS = True

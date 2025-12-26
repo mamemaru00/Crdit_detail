@@ -2,7 +2,7 @@
 Phase 2: マッピングデータ読込・検証機能のテスト (pytest形式)
 
 このモジュールは以下のテストケースを実行します:
-1. 正常系: config/mapping.jsonの読み込み・検証成功
+1. 正常系: data/mapping.jsonの読み込み・検証成功
 2. 異常系1: ファイルが存在しない場合にMappingLoadError
 3. 異常系2: JSONが不正な場合にInvalidMappingFormatError
 4. 異常系3: 必須フィールドが不足している場合にMappingValidationError
@@ -27,9 +27,9 @@ from modules.category_logic import (
 
 
 def test_normal_case():
-    """正常系: config/mapping.jsonの読み込み・検証成功"""
+    """正常系: data/mapping.jsonの読み込み・検証成功"""
     # マッピングデータ読み込み
-    data = load_mapping_data('config/mapping.json')
+    data = load_mapping_data('data/mapping.json')
 
     assert 'version' in data
     assert 'mappings' in data
