@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Credit Detail | Result</title>
+</head>
+<body>
+  <h1>処理結果（ダミー）</h1>
+
+  <nav>
+    <ul>
+      <li><a href="{{ url_for('index') }}">トップに戻る</a></li>
+      <li><a href="{{ url_for('mapping') }}">マッピング設定</a></li>
+    </ul>
+  </nav>
+
+  {% if result %}
+    <section>
+      <h2>処理サマリー</h2>
+      <dl>
+        <dt>総件数:</dt>
+        <dd>{{ result.summary.total_count }} 件</dd>
+
+        <dt>総金額:</dt>
+        <dd>{{ "{:,}".format(result.summary.total_amount) }} 円</dd>
+
+        <dt>処理時間:</dt>
+        <dd>{{ "%.2f"|format(result.processing_time) }} 秒</dd>
+
+        <dt>更新セル数:</dt>
+        <dd>{{ result.updated_cells }} セル</dd>
+
+        {% if result.spreadsheet_id %}
+        <dt>スプレッドシートID:</dt>
+        <dd>{{ result.spreadsheet_id }}</dd>
+        {% endif %}
+
+        {% if result.target_year %}
+        <dt>対象年:</dt>
+        <dd>{{ result.target_year }} 年</dd>
+        {% endif %}
+      </dl>
+    </section>
+
+    {% if result.unregistered_stores %}
+    <section>
+      <h2>未登録店舗</h2>
+      <p>{{ result.unregistered_stores|length }} 件の未登録店舗が検出されました。</p>
+      <ul>
+      {% for store in result.unregistered_stores %}
+        <li>{{ store.store_name }} - {{ "{:,}".format(store.total_amount) }} 円 ({{ store.count }} 件)</li>
+      {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section>
+      <h2>詳細データ（JSON）</h2>
+      <pre>{{ result | tojson(indent=2) }}</pre>
+    </section>
+  {% else %}
+    <section>
+      <p>表示できる結果がありません。</p>
+      <p>先にCSVファイルを処理してください。</p>
+    </section>
+  {% endif %}
+</body>
+</html>

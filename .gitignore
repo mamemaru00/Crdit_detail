@@ -100,3 +100,6 @@ data/backups/*.json
 
 # テストデータ（実データは除外）
 tests/test_data/sample_real_*.csv
+
+# Playwright MCP
+.playwright-mcp/

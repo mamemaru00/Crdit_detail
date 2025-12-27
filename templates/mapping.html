@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Credit Detail | Mapping</title>
+</head>
+<body>
+  <h1>マッピング設定（ダミー）</h1>
+  <p>Phase 3 で実装予定のマッピング管理画面の仮テンプレートです。</p>
+
+  <nav>
+    <ul>
+      <li><a href="{{ url_for('index') }}">トップに戻る</a></li>
+      <li><a href="{{ url_for('result') }}">処理結果</a></li>
+    </ul>
+  </nav>
+
+  <section>
+    <h2>予定機能</h2>
+    <ul>
+      <li>マッピング一覧表示</li>
+      <li>新規マッピング追加</li>
+      <li>マッピング編集</li>
+      <li>マッピング削除</li>
+    </ul>
+  </section>
+
+  <section>
+    <h3>API エンドポイント（動作確認用）</h3>
+    <ul>
+      <li>GET /mapping/list - マッピング一覧取得</li>
+      <li>POST /mapping/add - マッピング追加</li>
+      <li>PUT /mapping/edit/&lt;id&gt; - マッピング編集</li>
+      <li>DELETE /mapping/delete/&lt;id&gt; - マッピング削除</li>
+    </ul>
+  </section>
+</body>
+</html>
