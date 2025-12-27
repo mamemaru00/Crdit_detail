@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: aeon-card-import-system
+
+    ports:
+      - "5000:5000"
+
+    volumes:
+      # 認証情報（読み取り専用）
+      - ./config:/app/config:ro
+      # アプリケーションデータ（読み書き可能）
+      - ./data:/app/data
+      # アップロードファイル（読み書き可能）
+      - ./uploads:/app/uploads
+      # ログファイル（読み書き可能）
+      - ./logs:/app/logs
+
+    environment:
+      # Flask環境設定
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-default-secret-key-change-in-production}
+
+      # Google Sheets設定
+      - SPREADSHEET_ID=${SPREADSHEET_ID:-}
+
+      # アプリケーション設定
+      - DEFAULT_YEAR=${DEFAULT_YEAR:-2025}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Pythonバッファリング無効化（ログ即時出力）
+      - PYTHONUNBUFFERED=1
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - aeon-network
+
+networks:
+  aeon-network:
+    driver: bridge

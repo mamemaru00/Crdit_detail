@@ -41,20 +41,24 @@ project_root/
 ├── requirements.txt       # 依存パッケージ
 ├── Dockerfile
 ├── docker-compose.yml
+├── .env                   # 環境変数（.gitignore対象）
+├── .env.example           # 環境変数テンプレート
 ├── config/
-│   ├── mapping.json          # カテゴリマッピング
 │   └── service_account.json  # Google認証情報（.gitignore対象）
-├── static/
+├── data/
+│   ├── mapping.json          # カテゴリマッピング
+│   └── backups/              # マッピングバックアップ（.gitignore対象）
+├── static/                   # フロントエンド静的ファイル（未実装）
 │   ├── css/
 │   │   └── style.css     # カスタムCSS
 │   └── js/
 │       ├── main.js       # メイン画面用JS
 │       └── mapping.js    # マッピング管理用JS
-├── templates/
+├── templates/                # Jinja2テンプレート（未実装）
 │   ├── base.html         # ベーステンプレート
 │   ├── index.html        # メイン画面
 │   ├── mapping.html      # マッピング管理画面
-│   └── unregistered.html # 未登録店舗確認画面
+│   └── result.html       # 処理結果画面
 └── modules/
     ├── csv_processor.py  # CSV処理モジュール
     ├── sheets_api.py     # Sheets API連携
@@ -65,7 +69,7 @@ project_root/
 ## Technology Stack
 
 ### Backend
-- **Python**: 3.10+ (推奨 3.14.0)
+- **Python**: 3.10+ (Docker: 3.12-slim-bookworm, LTS 2028年まで)
 - **Flask**: 3.0+ (推奨 3.1.2)
 - **pandas**: 2.0+ (CSV処理・データ操作)
 - **google-api-python-client**: 2.100+ (Google Sheets API連携)
@@ -251,6 +255,78 @@ GET  /download/log  # 処理ログダウンロード
 - システム構成: [.claude/01_development_docs/00_system_architecture.md](.claude/01_development_docs/00_system_architecture.md)
 - バックエンドAPI: [.claude/02_backend/01_backend_api_routes.md](.claude/02_backend/01_backend_api_routes.md)
 - テスト仕様: [.claude/09_test/00_backend_test_specification.md](.claude/09_test/00_backend_test_specification.md)
+
+## AI Development Tools
+
+### Codex MCP使用ガイドライン
+
+Codex MCP（Model Context Protocol）は、GPT-5-Codexを活用した深い分析・複雑な推論ツールです。以下の状況で**積極的に使用**してください。
+
+#### 使用推奨シーン
+
+1. **リファクタリング時**
+   - 大規模なコード整理（複数ファイル、100行以上の変更）
+   - アーキテクチャの見直し
+   - パフォーマンス最適化
+   - コードの可読性・保守性向上
+   ```
+   例: app.pyのprocess()関数（150行以上）の分割
+   ```
+
+2. **バグ修正で3回以上失敗する時**
+   - 同じバグに対して3回以上修正を試みても解決しない場合
+   - 根本原因が不明な複雑なバグ
+   - 複数モジュールにまたがるバグ
+   - 再現性の低いバグ
+   ```
+   例: Google Sheets API連携エラーが繰り返し発生する場合
+   ```
+
+3. **妥当性を確認する時**
+   - 設計判断の妥当性検証
+   - セキュリティ要件の充足確認
+   - パフォーマンス要件の達成可否
+   - アーキテクチャの適切性評価
+   - コード品質の総合評価
+   ```
+   例: Phase 2バックエンド実装の総合レビュー
+   ```
+
+#### Codex MCP使用方法
+
+**基本的な使い方:**
+```python
+# Codex MCPツールを使用
+mcp__codex__codex(
+    prompt="具体的な質問や依頼内容",
+    config={"web_search": true}  # Web検索を有効化
+)
+```
+
+**使用例:**
+```
+- リファクタリング計画の立案
+- バグの根本原因分析
+- コードレビューと改善提案
+- アーキテクチャ設計の妥当性評価
+- セキュリティ脆弱性の検出
+```
+
+#### 二段構えアプローチ
+
+- **Claude Code（第一段階）**: タスクの整理・具体化、プロジェクト文脈の追加
+- **Codex CLI（第二段階）**: 深い分析、複雑な推論、最適解の導出
+
+このアプローチにより、コスト効率と品質のバランスを最適化します。
+
+#### 設定確認
+
+Codex MCPのWeb検索機能が有効になっているか確認：
+```bash
+# 設定ファイル: C:\Users\kshou\.codex\config.toml
+[tools]
+web_search = true
+```
 
 ## System Requirements
 
