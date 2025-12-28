@@ -1011,6 +1011,78 @@ def download_log():
         )), 500
 
 
+# ==================== セキュリティヘッダー設定 ====================
+
+@app.after_request
+def set_security_headers(response):
+    """
+    セキュリティヘッダーを設定
+
+    OWASP推奨のセキュリティヘッダーを全レスポンスに追加。
+    - CSP（Content-Security-Policy）: XSS対策
+    - X-Content-Type-Options: MIMEスニッフィング防止
+    - X-Frame-Options: クリックジャッキング防止
+    - Referrer-Policy: リファラー制御
+    - Permissions-Policy: 不要な機能無効化
+    - HSTS（本番のみ）: HTTPS強制
+
+    注意:
+    - X-XSS-Protectionは非推奨のため使用しない
+    - CSPは開発/本番で設定を切り替え
+
+    Args:
+        response: Flaskレスポンスオブジェクト
+
+    Returns:
+        Response: ヘッダー追加後のレスポンス
+    """
+    # CSP設定（環境別）
+    if app.config['DEBUG']:
+        # 開発環境: Bootstrap/jQuery CDN許可、unsafe-inline許可
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "https://cdn.jsdelivr.net https://code.jquery.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "connect-src 'self' https://accounts.google.com https://sheets.googleapis.com; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "frame-ancestors 'none'"
+        )
+    else:
+        # 本番環境: 厳格設定（unsafe-inline削除、upgrade-insecure-requests追加）
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net https://code.jquery.com; "
+            "style-src 'self' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "connect-src 'self' https://accounts.google.com https://sheets.googleapis.com; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "frame-ancestors 'none'; "
+            "upgrade-insecure-requests"
+        )
+
+    response.headers['Content-Security-Policy'] = csp
+
+    # MIMEスニッフィング防止
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # クリックジャッキング防止
+    response.headers['X-Frame-Options'] = 'DENY'
+
+    # リファラー制御
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # 不要な機能の無効化
+    response.headers['Permissions-Policy'] = 'camera=(), geolocation=(), microphone=()'
+
+    # HSTS（本番環境のみ、HTTPS必須）
+    if not app.config['DEBUG']:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
+    return response
+
+
 # ==================== アプリケーション起動 ====================
 
 if __name__ == '__main__':
