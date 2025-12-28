@@ -1077,7 +1077,8 @@ def set_security_headers(response):
     response.headers['Permissions-Policy'] = 'camera=(), geolocation=(), microphone=()'
 
     # HSTS（本番環境のみ、HTTPS必須）
-    if not app.config['DEBUG']:
+    # FLASK_ENVがproductionの時のみ有効化（テスト/ステージング環境では無効）
+    if os.environ.get('FLASK_ENV') == 'production':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
     return response

@@ -1708,7 +1708,9 @@ Permissions-Policy: camera=(), geolocation=(), microphone=()
 
   <!-- Bootstrap Icons (オプション) -->
   <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css">
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css"
+        integrity="sha384-4LISF5TTJX/fLmGSxO53rV4miRxdg84mZsxmO8Rx5jGtp/LbrixFETvWa5a6sESd"
+        crossorigin="anonymous">
 
   <!-- カスタムCSS（将来的に追加） -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">

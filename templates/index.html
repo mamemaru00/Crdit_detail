@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}ホーム - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="alert alert-info" role="alert">
+      <i class="bi bi-info-circle"></i>
+      <strong>開発中</strong>: このページはStep 3.2で実装予定です。
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h1 class="h4 mb-0">
+          <i class="bi bi-file-earmark-arrow-up"></i> CSV取込メイン画面
+        </h1>
+      </div>
+      <div class="card-body">
+        <p>イオンカード利用明細CSVファイルを取り込み、Googleスプレッドシートに自動反映します。</p>
+
+        <h2 class="h5 mt-4">実装予定機能（Step 3.2）</h2>
+        <ul>
+          <li>CSVファイルアップロード</li>
+          <li>明細データプレビュー表示</li>
+          <li>スプレッドシート設定（ID入力、対象年選択）</li>
+          <li>取込実行ボタン</li>
+          <li>処理結果サマリー表示</li>
+          <li>未登録店舗リスト表示</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
