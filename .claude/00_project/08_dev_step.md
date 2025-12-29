@@ -464,14 +464,43 @@
 ## Phase 3: フロントエンド開発
 
 ### Step 3.1: ベーステンプレート作成（templates/base.html）
-- [ ] HTML基本構造
-- [ ] Bootstrap 5.3 CDN読込
-- [ ] jQuery 3.7 CDN読込
-- [ ] ナビゲーションバー
-  - メイン画面リンク
-  - マッピング管理リンク
-- [ ] フッター
-- [ ] コンテンツブロック定義
+**完了日時**: 2025-12-29
+
+- [x] HTML基本構造
+- [x] Bootstrap 5.3 CDN読込
+- [x] jQuery 3.7 CDN読込
+- [x] Bootstrap Icons 1.11.0 CDN読込
+- [x] ナビゲーションバー
+  - [x] メイン画面リンク
+  - [x] マッピング管理リンク
+  - [x] レスポンシブ対応（モバイルハンバーガーメニュー）
+- [x] フッター
+- [x] コンテンツブロック定義
+- [x] アクセシビリティ対応
+  - [x] スキップリンク
+  - [x] ARIAラベル
+- [x] トースト通知領域（4種類：成功、エラー、警告、情報）
+- [x] モーダルダイアログ領域（3種類：削除確認、一括追加確認、エラー詳細）
+- [x] プログレスインジケーター領域
+- [x] カスタムCSS読込（static/css/style.css）
+- [x] カスタムJavaScript読込（static/js/main.js）
+- [x] **CSRF保護インフラ実装**
+  - [x] flask-wtf==1.2.1をrequirements.txtに追加
+  - [x] app.pyにCSRFProtect初期化（`csrf = CSRFProtect(app)`）
+  - [x] base.htmlにCSRFメタタグ追加（`<meta name="csrf-token" content="{{ csrf_token() }}">`）
+  - [x] main.jsにgetCsrfToken()関数実装
+  - [x] **既存POSTエンドポイントを一時的に除外**（`@csrf.exempt`）
+    - `/upload`, `/preview`, `/process` → **Step 3.2で有効化予定**
+    - `/mapping/add` → **Step 3.3で有効化予定**
+    - `/clear_session` → **全フロントエンド完了後に有効化予定**
+
+#### 実装状況サマリー
+- **実装ファイル**: templates/base.html（227行）、static/js/main.js（178行）、static/css/style.css（135行）
+- **Bootstrap**: 5.3.0（CDN）
+- **jQuery**: 3.7.1（CDN）
+- **Bootstrap Icons**: 1.11.0（CDN）
+- **CSRF保護方式**: Meta+Fetchヘッダー方式（flask-wtf使用）
+- **Git Commit**: 6daa491（fix: 既存POSTエンドポイントをCSRF保護から一時除外）
 
 ### Step 3.2: メイン画面作成（templates/index.html）
 - [ ] ファイル選択エリア
@@ -493,6 +522,13 @@
   - 合計金額・処理件数表示
   - 未登録店舗リスト
   - 詳細ログダウンロードボタン
+- [ ] **TODO: CSRF保護有効化（app.py）**
+  - [ ] `/upload`エンドポイントの`@csrf.exempt`を削除
+  - [ ] `/preview`エンドポイントの`@csrf.exempt`を削除
+  - [ ] `/process`エンドポイントの`@csrf.exempt`を削除
+- [ ] **TODO: CSRF対応（static/js/index.js）**
+  - [ ] 全てのPOSTリクエストに`X-CSRF-Token`ヘッダーを追加
+  - [ ] `getCsrfToken()`関数を使用してトークン取得
 
 ### Step 3.3: マッピング管理画面作成（templates/mapping.html）
 - [ ] 検索エリア
@@ -509,6 +545,13 @@
   - 列番号選択（B～V）
   - 登録・キャンセルボタン
 - [ ] インポート・エクスポートボタン
+- [ ] **TODO: CSRF保護有効化（app.py）**
+  - [ ] `/mapping/add`エンドポイントの`@csrf.exempt`を削除
+  - [ ] `/mapping/edit/<id>`エンドポイントがCSRF保護対象であることを確認
+  - [ ] `/mapping/delete/<id>`エンドポイントがCSRF保護対象であることを確認
+- [ ] **TODO: CSRF対応（static/js/mapping.js）**
+  - [ ] 全てのPOST/PUT/DELETEリクエストに`X-CSRF-Token`ヘッダーを追加
+  - [ ] `getCsrfToken()`関数を使用してトークン取得
 
 ### Step 3.4: CSS作成（static/css/style.css）
 - [ ] カスタムスタイル定義
