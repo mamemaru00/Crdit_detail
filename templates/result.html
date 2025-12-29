@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}処理結果 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <div class="alert alert-info" role="alert">
+      <i class="bi bi-info-circle"></i>
+      <strong>開発中</strong>: このページはStep 3.4で実装予定です。
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h1 class="h4 mb-0">
+          <i class="bi bi-check-circle"></i> 処理結果画面
+        </h1>
+      </div>
+      <div class="card-body">
+        <p>CSV取込処理の実行結果を表示します。</p>
+
+        <h2 class="h5 mt-4">実装予定機能（Step 3.4）</h2>
+        <ul>
+          <li>処理サマリー表示（処理件数、成功/失敗件数）</li>
+          <li>月別・カテゴリ別金額集計テーブル</li>
+          <li>未登録店舗リスト</li>
+          <li>処理詳細ログ表示</li>
+          <li>ログダウンロードボタン</li>
+          <li>メイン画面に戻るボタン</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

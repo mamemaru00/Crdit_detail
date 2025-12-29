@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}マッピング管理 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <div class="alert alert-info" role="alert">
+      <i class="bi bi-info-circle"></i>
+      <strong>開発中</strong>: このページはStep 3.3で実装予定です。
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h1 class="h4 mb-0">
+          <i class="bi bi-list-ul"></i> マッピング管理画面
+        </h1>
+      </div>
+      <div class="card-body">
+        <p>店舗名とカテゴリの対応関係を管理します。</p>
+
+        <h2 class="h5 mt-4">実装予定機能（Step 3.3）</h2>
+        <ul>
+          <li>店舗名検索機能</li>
+          <li>マッピング一覧テーブル表示</li>
+          <li>新規マッピング登録フォーム</li>
+          <li>既存マッピング編集・削除機能</li>
+          <li>パターンマッチ種別選択（完全一致/前方一致/部分一致）</li>
+          <li>カテゴリ選択ドロップダウン</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

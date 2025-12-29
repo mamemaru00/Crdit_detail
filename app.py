@@ -16,6 +16,7 @@ Version: 1.0
 """
 
 from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
 import logging
@@ -38,6 +39,9 @@ app = Flask(__name__)
 # 環境変数から環境名を取得（デフォルト: development）
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
+
+# CSRF保護の初期化
+csrf = CSRFProtect(app)
 
 # アップロードフォルダの作成
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -205,6 +209,7 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -296,6 +301,7 @@ def upload():
 
 
 @app.route('/preview', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -385,6 +391,7 @@ def preview():
 
 
 @app.route('/process', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def process():
     """
     CSVデータを処理してGoogle Sheetsに反映
@@ -511,10 +518,21 @@ def process():
             if month not in month_summary:
                 month_summary[month] = {
                     'amount': 0,
-                    'count': 0
+                    'count': 0,
+                    'by_category': {}  # カテゴリ別の詳細を追加
                 }
             month_summary[month]['amount'] += amount
             month_summary[month]['count'] += 1
+
+            # 月別・カテゴリ別サマリー
+            if category not in month_summary[month]['by_category']:
+                month_summary[month]['by_category'][category] = {
+                    'amount': 0,
+                    'count': 0,
+                    'column': column
+                }
+            month_summary[month]['by_category'][category]['amount'] += amount
+            month_summary[month]['by_category'][category]['count'] += 1
 
         # 9. バッチ更新実行
         batch_result = sheets_api.batch_update_cells(worksheet, updates)
@@ -643,6 +661,7 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.3でマッピング管理画面実装後にCSRF保護を有効化
 def mapping_add():
     """
     新規マッピングを追加
@@ -929,6 +948,7 @@ def request_entity_too_large(error):
 
 
 @app.route('/clear_session', methods=['POST'])
+@csrf.exempt  # TODO: 全フロントエンド実装完了後にCSRF保護を有効化
 def clear_session():
     """
     セッションをクリアする
@@ -1077,7 +1097,8 @@ def set_security_headers(response):
     response.headers['Permissions-Policy'] = 'camera=(), geolocation=(), microphone=()'
 
     # HSTS（本番環境のみ、HTTPS必須）
-    if not app.config['DEBUG']:
+    # FLASK_ENVがproductionの時のみ有効化（テスト/ステージング環境では無効）
+    if os.environ.get('FLASK_ENV') == 'production':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
     return response

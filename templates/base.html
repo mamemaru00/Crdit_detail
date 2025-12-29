@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}イオンカード明細取込システム{% endblock %}</title>
+
+  <!-- Bootstrap 5.3.0 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM"
+        crossorigin="anonymous">
+
+  <!-- Bootstrap Icons 1.11.0 -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css"
+        integrity="sha384-Q/b68FXi/uzI6bjcGbx7kHAobgdK2x1qOUrqdTvipaJci87t0PRovmYAIrCVE4x5"
+        crossorigin="anonymous">
+
+  <!-- カスタムCSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="d-flex flex-column min-vh-100">
+
+  <!-- スキップリンク（アクセシビリティ） -->
+  <a href="#main-content" class="visually-hidden-focusable">メインコンテンツへスキップ</a>
+
+  <!-- ナビゲーションバー -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+    <div class="container-fluid">
+      <!-- ブランドロゴ -->
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="bi bi-credit-card"></i> Credit Detail
+      </a>
+
+      <!-- モバイルハンバーガーメニュー -->
+      <button class="navbar-toggler" type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#mainNav"
+              aria-controls="mainNav"
+              aria-expanded="false"
+              aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- ナビゲーションメニュー -->
+      <div class="collapse navbar-collapse" id="mainNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">
+              <i class="bi bi-house"></i> ホーム
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('mapping') }}">
+              <i class="bi bi-list-ul"></i> マッピング管理
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- プログレスインジケーター領域 -->
+  {% block progress %}
+  <div id="progressIndicator" class="alert alert-info d-none" role="status" aria-live="polite">
+    <div class="d-flex align-items-center">
+      <div class="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></div>
+      <span>処理中…しばらくお待ちください。</span>
+    </div>
+  </div>
+  {% endblock %}
+
+  <!-- メインコンテンツ -->
+  <main id="main-content" class="container py-4">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- トースト通知領域 -->
+  <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer">
+    {% block toasts %}
+    <!-- 成功トースト -->
+    <div id="successToast" class="toast align-items-center text-bg-success border-0"
+         role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">処理が完了しました。</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="閉じる"></button>
+      </div>
+    </div>
+
+    <!-- エラートースト -->
+    <div id="errorToast" class="toast align-items-center text-bg-danger border-0"
+         role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">エラーが発生しました。</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="閉じる"></button>
+      </div>
+    </div>
+
+    <!-- 警告トースト -->
+    <div id="warningToast" class="toast align-items-center text-bg-warning border-0"
+         role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">未登録店舗が検出されました。</div>
+        <button type="button" class="btn-close me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="閉じる"></button>
+      </div>
+    </div>
+
+    <!-- 情報トースト -->
+    <div id="infoToast" class="toast align-items-center text-bg-info border-0"
+         role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">設定が更新されました。</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="閉じる"></button>
+      </div>
+    </div>
+    {% endblock %}
+  </div>
+
+  <!-- モーダルダイアログ領域 -->
+  {% block modals %}
+  <!-- マッピング削除確認モーダル -->
+  <div class="modal fade" id="deleteConfirmModal" tabindex="-1"
+       aria-labelledby="deleteModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteModalLabel">削除確認</h5>
+          <button type="button" class="btn-close"
+                  data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body">
+          <p>このマッピングを削除してもよろしいですか？</p>
+          <p class="text-muted mb-0">
+            店舗名: <span id="deleteStoreName" class="fw-bold"></span>
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary"
+                  data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-danger"
+                  id="confirmDeleteBtn">削除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 一括追加確認モーダル -->
+  <div class="modal fade" id="bulkAddModal" tabindex="-1"
+       aria-labelledby="bulkAddModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bulkAddModalLabel">一括追加確認</h5>
+          <button type="button" class="btn-close"
+                  data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body">
+          <p><span id="bulkAddCount" class="fw-bold"></span>件の未登録店舗をデフォルト列（B列）に振り分けます。</p>
+          <p class="text-muted mb-0">この操作は元に戻せません。</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary"
+                  data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary"
+                  id="confirmBulkAddBtn">追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- エラー詳細モーダル -->
+  <div class="modal fade" id="errorDetailModal" tabindex="-1"
+       aria-labelledby="errorDetailModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="errorDetailModalLabel">エラー詳細</h5>
+          <button type="button" class="btn-close btn-close-white"
+                  data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body">
+          <pre id="errorDetailContent" class="mb-0"></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary"
+                  data-bs-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endblock %}
+
+  <!-- フッター -->
+  <footer class="bg-body-tertiary text-center py-3 mt-auto" role="contentinfo">
+    <div class="container">
+      <small class="text-body-secondary">
+        &copy; 2025 イオンカード明細取込システム
+      </small>
+      {% block footer %}{% endblock %}
+    </div>
+  </footer>
+
+  <!-- Bootstrap 5.3.0 JavaScript Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+          crossorigin="anonymous"></script>
+
+  <!-- jQuery 3.7.1 -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+          integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+          crossorigin="anonymous"></script>
+
+  <!-- カスタムJavaScript -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+  {% block scripts %}{% endblock %}
+
+</body>
+</html>
