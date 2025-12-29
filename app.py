@@ -16,6 +16,7 @@ Version: 1.0
 """
 
 from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
 import logging
@@ -38,6 +39,9 @@ app = Flask(__name__)
 # 環境変数から環境名を取得（デフォルト: development）
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
+
+# CSRF保護の初期化
+csrf = CSRFProtect(app)
 
 # アップロードフォルダの作成
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -511,10 +515,21 @@ def process():
             if month not in month_summary:
                 month_summary[month] = {
                     'amount': 0,
-                    'count': 0
+                    'count': 0,
+                    'by_category': {}  # カテゴリ別の詳細を追加
                 }
             month_summary[month]['amount'] += amount
             month_summary[month]['count'] += 1
+
+            # 月別・カテゴリ別サマリー
+            if category not in month_summary[month]['by_category']:
+                month_summary[month]['by_category'][category] = {
+                    'amount': 0,
+                    'count': 0,
+                    'column': column
+                }
+            month_summary[month]['by_category'][category]['amount'] += amount
+            month_summary[month]['by_category'][category]['count'] += 1
 
         # 9. バッチ更新実行
         batch_result = sheets_api.batch_update_cells(worksheet, updates)

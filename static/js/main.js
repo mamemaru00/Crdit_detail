@@ -163,9 +163,15 @@
   };
 
   // =========================================
-  // CSRF対応（Step 3.2で実装予定）
+  // グローバル関数: CSRFトークン取得
   // =========================================
-  // Meta+Fetchヘッダー方式によるCSRF対応は、Step 3.2で実装します。
-  // 現時点では、CSRFトークン機能は未実装です。
+  /**
+   * CSRFトークンをメタタグから取得
+   * @returns {string} CSRFトークン値（存在しない場合は空文字列）
+   */
+  window.getCsrfToken = function() {
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    return metaTag ? metaTag.getAttribute('content') : '';
+  };
 
 })();
