@@ -503,32 +503,44 @@
 - **Git Commit**: 6daa491（fix: 既存POSTエンドポイントをCSRF保護から一時除外）
 
 ### Step 3.2: メイン画面作成（templates/index.html）
-- [ ] ファイル選択エリア
+**完了日時**: 2025-12-29
+
+- [x] ファイル選択エリア
   - `<input type="file" accept=".csv">`
   - 選択ファイル名表示
   - プレビューボタン
-- [ ] プレビューテーブル
+- [x] プレビューテーブル
   - 利用日、店舗名、金額列
   - 最大5件表示
-- [ ] スプレッドシート設定エリア
+- [x] スプレッドシート設定エリア
   - スプレッドシートID入力欄
   - 対象年選択ドロップダウン（2023-2026）
   - サービスアカウント情報表示
-- [ ] 実行ボタンエリア
+- [x] 実行ボタンエリア
   - 「取込実行」ボタン
   - ローディング表示
-- [ ] 結果表示エリア
+- [x] 結果表示エリア
   - 月別・カテゴリ別サマリーテーブル
   - 合計金額・処理件数表示
   - 未登録店舗リスト
   - 詳細ログダウンロードボタン
-- [ ] **TODO: CSRF保護有効化（app.py）**
-  - [ ] `/upload`エンドポイントの`@csrf.exempt`を削除
-  - [ ] `/preview`エンドポイントの`@csrf.exempt`を削除
-  - [ ] `/process`エンドポイントの`@csrf.exempt`を削除
-- [ ] **TODO: CSRF対応（static/js/index.js）**
-  - [ ] 全てのPOSTリクエストに`X-CSRF-Token`ヘッダーを追加
-  - [ ] `getCsrfToken()`関数を使用してトークン取得
+- [x] **CSRF保護有効化（app.py）**
+  - [x] `/upload`エンドポイントの`@csrf.exempt`を削除
+  - [x] `/preview`エンドポイントの`@csrf.exempt`を削除
+  - [x] `/process`エンドポイントの`@csrf.exempt`を削除
+- [x] **CSRF対応（static/js/index.js）**
+  - [x] 全てのPOSTリクエストに`X-CSRF-Token`ヘッダーを追加
+  - [x] `getCsrfToken()`関数を使用してトークン取得
+
+#### 実装内容サマリー
+- **templates/index.html**: 286行（5セクション構成、Bootstrap 5.3、ARIA対応）
+- **static/js/index.js**: 437行（CSRF保護対応、XSS対策、エラーハンドリング完備）
+- **app.py修正**: 3箇所の`@csrf.exempt`削除（CSRF保護有効化）
+
+#### 実装ファイル
+- `C:\work\Lesson\個人開発\Crdit_detail\templates\index.html`（完全実装）
+- `C:\work\Lesson\個人開発\Crdit_detail\static\js\index.js`（完全実装）
+- `C:\work\Lesson\個人開発\Crdit_detail\app.py`（CSRF保護有効化）
 
 ### Step 3.3: マッピング管理画面作成（templates/mapping.html）
 - [ ] 検索エリア

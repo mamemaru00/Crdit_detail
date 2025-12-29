@@ -1,35 +1,286 @@
 {% extends 'base.html' %}
 
-{% block title %}ホーム - {{ super() }}{% endblock %}
+{% block title %}CSV取込 - {{ super() }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-8">
-    <div class="alert alert-info" role="alert">
-      <i class="bi bi-info-circle"></i>
-      <strong>開発中</strong>: このページはStep 3.2で実装予定です。
-    </div>
+<div class="container py-4">
+  <h1 class="mb-4">
+    <i class="bi bi-file-earmark-arrow-up"></i> CSV取込メイン画面
+  </h1>
 
-    <div class="card">
-      <div class="card-header bg-primary text-white">
-        <h1 class="h4 mb-0">
-          <i class="bi bi-file-earmark-arrow-up"></i> CSV取込メイン画面
-        </h1>
-      </div>
-      <div class="card-body">
-        <p>イオンカード利用明細CSVファイルを取り込み、Googleスプレッドシートに自動反映します。</p>
+  <!-- Step 1: CSVファイル選択エリア -->
+  <section id="fileSelectionArea" class="card mb-4" aria-labelledby="fileSelectionTitle">
+    <div class="card-header bg-primary text-white">
+      <h2 class="h5 mb-0" id="fileSelectionTitle">
+        <i class="bi bi-file-earmark-arrow-up"></i> Step 1: CSVファイル選択
+      </h2>
+    </div>
+    <div class="card-body">
+      <!-- ファイル選択フォーム -->
+      <form id="uploadForm" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="csvFile" class="form-label">
+            イオンカード利用明細CSVファイル（Shift_JIS形式）
+          </label>
+          <input
+            type="file"
+            class="form-control"
+            id="csvFile"
+            name="csv_file"
+            accept=".csv"
+            required
+            aria-describedby="fileHelp"
+          >
+          <div id="fileHelp" class="form-text">
+            ファイルサイズ上限: 10MB | 対応形式: CSV（Shift_JIS）
+          </div>
+          <!-- バリデーションエラー表示 -->
+          <div class="invalid-feedback">
+            CSVファイルを選択してください。
+          </div>
+        </div>
 
-        <h2 class="h5 mt-4">実装予定機能（Step 3.2）</h2>
-        <ul>
-          <li>CSVファイルアップロード</li>
-          <li>明細データプレビュー表示</li>
-          <li>スプレッドシート設定（ID入力、対象年選択）</li>
-          <li>取込実行ボタン</li>
-          <li>処理結果サマリー表示</li>
-          <li>未登録店舗リスト表示</li>
-        </ul>
+        <!-- 選択ファイル名表示 -->
+        <div id="selectedFileInfo" class="alert alert-info d-none" role="status">
+          <i class="bi bi-file-earmark-text"></i>
+          選択ファイル: <strong id="selectedFileName"></strong>
+          （<span id="selectedFileSize"></span>）
+        </div>
+
+        <!-- プレビューボタン -->
+        <button
+          type="button"
+          id="previewBtn"
+          class="btn btn-outline-primary"
+          disabled
+        >
+          <i class="bi bi-eye"></i> プレビュー表示
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Step 2: プレビューエリア（初期非表示） -->
+  <section id="previewArea" class="card mb-4 d-none" aria-labelledby="previewTitle">
+    <div class="card-header bg-success text-white">
+      <h2 class="h5 mb-0" id="previewTitle">
+        <i class="bi bi-eye"></i> Step 2: データプレビュー
+      </h2>
+    </div>
+    <div class="card-body">
+      <!-- プレビュー統計情報 -->
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <div class="text-center p-3 bg-light rounded">
+            <div class="h3 text-primary mb-0" id="previewTotalCount">0</div>
+            <div class="text-muted small">総件数</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-center p-3 bg-light rounded">
+            <div class="h3 text-success mb-0" id="previewTotalAmount">0円</div>
+            <div class="text-muted small">総金額</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-center p-3 bg-light rounded">
+            <div class="h6 mb-0">
+              <span id="previewDateRange" class="text-secondary">-</span>
+            </div>
+            <div class="text-muted small">期間</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- プレビューテーブル -->
+      <div class="table-responsive">
+        <table class="table table-striped table-hover" role="table">
+          <caption class="visually-hidden">明細データプレビュー（先頭5件）</caption>
+          <thead class="table-light">
+            <tr>
+              <th scope="col">利用日</th>
+              <th scope="col">店舗名</th>
+              <th scope="col" class="text-end">金額</th>
+            </tr>
+          </thead>
+          <tbody id="previewTableBody">
+            <!-- JavaScriptで動的生成 -->
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-muted small mb-0">
+        <i class="bi bi-info-circle"></i> 先頭5件のみ表示しています
+      </p>
+    </div>
+  </section>
+
+  <!-- Step 3: スプレッドシート設定エリア（初期非表示） -->
+  <section id="settingsArea" class="card mb-4 d-none" aria-labelledby="settingsTitle">
+    <div class="card-header bg-info text-white">
+      <h2 class="h5 mb-0" id="settingsTitle">
+        <i class="bi bi-gear"></i> Step 3: スプレッドシート設定
+      </h2>
+    </div>
+    <div class="card-body">
+      <form id="settingsForm" novalidate>
+        <!-- スプレッドシートID入力 -->
+        <div class="mb-3">
+          <label for="spreadsheetId" class="form-label">
+            スプレッドシートID <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="spreadsheetId"
+            name="spreadsheet_id"
+            placeholder="例: 10RJcB-_pOqsxA-6mGZ..."
+            required
+            pattern="[A-Za-z0-9_-]{30,}"
+            aria-describedby="spreadsheetIdHelp"
+          >
+          <div id="spreadsheetIdHelp" class="form-text">
+            GoogleスプレッドシートのURL内のIDをコピーしてください
+          </div>
+          <div class="invalid-feedback">
+            有効なスプレッドシートIDを入力してください（30文字以上の英数字、ハイフン、アンダースコア）
+          </div>
+        </div>
+
+        <!-- 対象年選択 -->
+        <div class="mb-3">
+          <label for="targetYear" class="form-label">
+            対象年 <span class="text-danger">*</span>
+          </label>
+          <select
+            class="form-select"
+            id="targetYear"
+            name="target_year"
+            required
+          >
+            <option value="">年を選択してください</option>
+            <option value="2023">2023年</option>
+            <option value="2024">2024年</option>
+            <option value="2025" selected>2025年</option>
+            <option value="2026">2026年</option>
+          </select>
+          <div class="invalid-feedback">
+            対象年を選択してください
+          </div>
+        </div>
+
+        <!-- サービスアカウント情報表示 -->
+        <div class="alert alert-light" role="status">
+          <h3 class="h6">
+            <i class="bi bi-info-circle-fill text-info"></i> サービスアカウント情報
+          </h3>
+          <p class="mb-1 small">
+            <strong>メールアドレス:</strong>
+            <code>creditapi@creditapi-470614.iam.gserviceaccount.com</code>
+          </p>
+          <p class="mb-0 small text-muted">
+            スプレッドシートに上記アカウントの編集権限を付与してください
+          </p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Step 4: 実行ボタンエリア（初期非表示） -->
+  <section id="executeArea" class="card mb-4 d-none" aria-labelledby="executeTitle">
+    <div class="card-header bg-warning">
+      <h2 class="h5 mb-0" id="executeTitle">
+        <i class="bi bi-play-fill"></i> Step 4: 取込実行
+      </h2>
+    </div>
+    <div class="card-body text-center">
+      <p>設定内容を確認の上、取込を実行してください。</p>
+
+      <!-- 実行ボタン -->
+      <button
+        type="button"
+        id="executeBtn"
+        class="btn btn-warning btn-lg"
+      >
+        <i class="bi bi-upload"></i> 取込実行
+      </button>
+    </div>
+  </section>
+
+  <!-- Step 5: 結果表示エリア（初期非表示） -->
+  <section id="resultArea" class="card mb-4 d-none" aria-labelledby="resultTitle">
+    <div class="card-header bg-success text-white">
+      <h2 class="h5 mb-0" id="resultTitle">
+        <i class="bi bi-check-circle"></i> Step 5: 処理結果
+      </h2>
+    </div>
+    <div class="card-body">
+      <!-- 処理サマリー -->
+      <div class="alert alert-success" role="status">
+        <h3 class="h5">
+          <i class="bi bi-check-circle-fill"></i> 処理完了
+        </h3>
+        <p class="mb-0">
+          合計 <strong id="resultTotalCount">0</strong>件 /
+          <strong id="resultTotalAmount">0円</strong> を反映しました
+          （処理時間: <span id="resultProcessingTime">0</span>秒）
+        </p>
+      </div>
+
+      <!-- 月別・カテゴリ別サマリーテーブル -->
+      <h3 class="h6 mt-4 mb-3">月別・カテゴリ別サマリー</h3>
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm" role="table">
+          <caption class="visually-hidden">月別・カテゴリ別処理サマリー</caption>
+          <thead class="table-light">
+            <tr>
+              <th scope="col">月</th>
+              <th scope="col">カテゴリ</th>
+              <th scope="col">列</th>
+              <th scope="col" class="text-end">件数</th>
+              <th scope="col" class="text-end">金額</th>
+            </tr>
+          </thead>
+          <tbody id="resultSummaryTableBody">
+            <!-- JavaScriptで動的生成 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 未登録店舗リスト -->
+      <div id="unregisteredStoresSection" class="mt-4 d-none">
+        <h3 class="h6 mb-3">
+          <i class="bi bi-exclamation-triangle-fill text-warning"></i> 未登録店舗
+        </h3>
+        <div class="alert alert-warning" role="status">
+          <p class="mb-2">
+            以下の店舗はマッピングに登録されていません。
+            デフォルト列（B列: 支払額）に振り分けました。
+          </p>
+          <ul id="unregisteredStoresList" class="mb-2">
+            <!-- JavaScriptで動的生成 -->
+          </ul>
+          <a href="{{ url_for('mapping') }}" class="btn btn-sm btn-warning">
+            <i class="bi bi-list-ul"></i> マッピング管理画面で登録
+          </a>
+        </div>
+      </div>
+
+      <!-- ログダウンロードボタン -->
+      <div class="text-center mt-4">
+        <a
+          href="{{ url_for('download_log') }}"
+          class="btn btn-outline-secondary"
+          download
+        >
+          <i class="bi bi-download"></i> 詳細ログをダウンロード
+        </a>
       </div>
     </div>
-  </div>
+  </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
 {% endblock %}

@@ -209,7 +209,6 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -301,7 +300,6 @@ def upload():
 
 
 @app.route('/preview', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -391,7 +389,6 @@ def preview():
 
 
 @app.route('/process', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def process():
     """
     CSVデータを処理してGoogle Sheetsに反映
