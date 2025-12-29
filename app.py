@@ -209,6 +209,7 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -300,6 +301,7 @@ def upload():
 
 
 @app.route('/preview', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -389,6 +391,7 @@ def preview():
 
 
 @app.route('/process', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def process():
     """
     CSVデータを処理してGoogle Sheetsに反映
@@ -658,6 +661,7 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
+@csrf.exempt  # TODO: Step 3.3でマッピング管理画面実装後にCSRF保護を有効化
 def mapping_add():
     """
     新規マッピングを追加
@@ -944,6 +948,7 @@ def request_entity_too_large(error):
 
 
 @app.route('/clear_session', methods=['POST'])
+@csrf.exempt  # TODO: 全フロントエンド実装完了後にCSRF保護を有効化
 def clear_session():
     """
     セッションをクリアする
