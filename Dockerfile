@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # 必要ディレクトリ作成
-RUN mkdir -p uploads logs config
+RUN mkdir -p uploads logs config data/sessions
 
 # 非rootユーザー作成（セキュリティ強化）
 RUN useradd -m -u 1000 appuser && \

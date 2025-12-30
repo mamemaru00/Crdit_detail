@@ -47,8 +47,10 @@ project_root/
 │   └── service_account.json  # Google認証情報（.gitignore対象）
 ├── data/
 │   ├── mapping.json          # カテゴリマッピング
-│   └── backups/              # マッピングバックアップ（.gitignore対象）
-├── static/                   # フロントエンド静的ファイル（未実装）
+│   ├── backups/              # マッピングバックアップ（.gitignore対象）
+│   └── sessions/             # セッションストア（.gitignore対象）
+│       └── sessions.db       # SQLiteセッションDB（.gitignore対象）
+├── static/                   # フロントエンド静的ファイル
 │   ├── css/
 │   │   └── style.css     # カスタムCSS
 │   └── js/
@@ -63,7 +65,8 @@ project_root/
     ├── csv_processor.py  # CSV処理モジュール
     ├── sheets_api.py     # Sheets API連携
     ├── mapping_manager.py # マッピング管理
-    └── category_logic.py  # カテゴリ振り分けロジック
+    ├── category_logic.py  # カテゴリ振り分けロジック
+    └── session_store.py   # セッションストア（SQLite）
 ```
 
 ## Technology Stack
@@ -76,6 +79,7 @@ project_root/
 - **google-auth**: 2.23+ (OAuth認証)
 - **gspread**: 6.x (Google Sheets連携)
 - **chardet**: 文字コード検出
+- **SQLite**: 3.x (セッションストア、WALモード対応)
 
 ### Frontend
 - **Bootstrap**: 5.3 (UIフレームワーク)
@@ -164,6 +168,13 @@ python app.py
    - マッピング未登録店舗の自動検知
    - 金額合計と処理件数の表示
    - 新規マッピング登録機能
+
+6. **セッション管理**
+   - SQLiteベースのサーバーサイドセッションストア
+   - Cookie 4KB制限の解消（大容量CSVデータ対応）
+   - セッションデータのセキュア管理
+   - 自動有効期限管理（TTL: 30分、カスタマイズ可能）
+   - WALモード対応（同時実行性向上）
 
 ## API Endpoints
 

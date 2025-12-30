@@ -24,6 +24,11 @@ class Config:
     DEFAULT_COLUMN = 'B'
     CSV_ENCODING = 'Shift_JIS'
 
+    # セッションストア設定
+    SESSION_DB_PATH = os.path.join('data', 'sessions', 'sessions.db')
+    SESSION_TTL_SECONDS = int(os.environ.get('SESSION_TTL_SECONDS', '1800'))  # 30分
+    SESSION_CLEANUP_INTERVAL_HOURS = int(os.environ.get('SESSION_CLEANUP_INTERVAL_HOURS', '6'))  # 6時間
+
     # API 設定
     API_TIMEOUT = 30
     BATCH_SIZE = 100

@@ -50,6 +50,12 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(Path(app.config['LOG_FILE']).parent, exist_ok=True)
 os.makedirs('data/backups', exist_ok=True)
 
+# SessionStore初期化
+from modules.session_store import SessionStore
+
+# セッションディレクトリ作成
+os.makedirs(Path(app.config['SESSION_DB_PATH']).parent, exist_ok=True)
+
 # ==================== ロギング設定 ====================
 
 # ロガー設定
@@ -62,6 +68,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# SessionStoreインスタンス生成
+session_store = SessionStore(
+    db_path=app.config['SESSION_DB_PATH'],
+    ttl_seconds=app.config['SESSION_TTL_SECONDS']
+)
+
+logger.info(f"SessionStore初期化完了: {app.config['SESSION_DB_PATH']}")
 
 # ==================== 定数定義 ====================
 
@@ -196,8 +210,9 @@ def result():
     """
     logger.info("処理結果画面を表示")
 
-    # セッションから処理結果を取得
-    result_data = session.get('process_result')
+    # セッションストアから処理結果を取得
+    session_data = session_store.load(session.sid) or {}
+    result_data = session_data.get('process_result')
 
     if result_data is None:
         logger.warning("処理結果がセッションに存在しません。メイン画面にリダイレクトします")
@@ -272,14 +287,28 @@ def upload():
         # 6. ファイルサイズ取得
         file_size = os.path.getsize(file_path)
 
-        # 7. セッションにファイルパスを保存
-        session['uploaded_file_path'] = file_path
-        session['uploaded_filename'] = filename
+        # 7. セッションストアにファイルパスを保存
+        try:
+            session_data = session_store.load(session.sid) or {}
+            session_data['uploaded_file_path'] = file_path
+            session_data['uploaded_filename'] = filename
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
+            # フォールバック: Cookieセッションに保存
+            session['uploaded_file_path'] = file_path
+            session['uploaded_filename'] = filename
 
         logger.info(f"ファイルアップロード成功: {safe_filename} ({file_size} bytes)")
 
         # 8. 古いファイルのクリーンアップ（非同期的に実行）
         cleanup_old_files(app.config['UPLOAD_FOLDER'])
+
+        # 9. 古いセッションのクリーンアップ
+        try:
+            session_store.prune_expired()
+        except Exception as e:
+            logger.warning(f"セッションクリーンアップ中にエラー: {str(e)}")
 
         return jsonify(create_response(
             'success',
@@ -329,8 +358,9 @@ def preview():
     logger.info("CSVプレビュー取得処理を開始")
 
     try:
-        # 1. セッションからファイルパス取得
-        file_path = session.get('uploaded_file_path')
+        # 1. セッションストアからファイルパス取得
+        session_data = session_store.load(session.sid) or {}
+        file_path = session_data.get('uploaded_file_path')
 
         if not file_path:
             logger.warning("ファイルがアップロードされていません")
@@ -359,8 +389,14 @@ def preview():
             f"合計{result['summary']['total_amount']:,}円"
         )
 
-        # 4. セッションに全データを保存（後続のprocess処理用）
-        session['csv_data'] = result['details']
+        # 4. セッションストアに全データを保存（後続のprocess処理用）
+        try:
+            session_data['csv_data'] = result['details']
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
+            # フォールバック: Cookieセッションに保存
+            session['csv_data'] = result['details']
 
         return jsonify(create_response(
             'success',
@@ -452,11 +488,12 @@ def process():
                 message='対象年を正しく指定してください'
             )), 400
 
-        # 3. セッションからCSVデータ取得
-        csv_data = session.get('csv_data')
+        # 3. セッションストアからCSVデータ取得
+        session_data = session_store.load(session.sid) or {}
+        csv_data = session_data.get('csv_data')
 
         if not csv_data:
-            logger.warning("CSVデータがセッションに存在しません")
+            logger.warning("CSVデータがセッションストアに存在しません")
             return jsonify(create_response(
                 'error',
                 message='先にCSVファイルをプレビューしてください'
@@ -555,8 +592,14 @@ def process():
             'target_year': target_year
         }
 
-        # 11. セッションに処理結果を保存
-        session['process_result'] = result_data
+        # 11. セッションストアに処理結果を保存
+        try:
+            session_data['process_result'] = result_data
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
+            # フォールバック: Cookieセッションに保存
+            session['process_result'] = result_data
 
         logger.info(
             f"CSV処理完了: "
@@ -961,13 +1004,19 @@ def clear_session():
     logger.info("セッションクリア処理を開始")
 
     try:
+        # セッションストアからファイルパス取得
+        session_data = session_store.load(session.sid) or {}
+        file_path = session_data.get('uploaded_file_path')
+
         # アップロードファイルの削除
-        file_path = session.get('uploaded_file_path')
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
             logger.info(f"アップロードファイルを削除: {file_path}")
 
-        # セッションクリア
+        # セッションストアからデータ削除
+        session_store.delete(session.sid)
+
+        # Cookieセッションもクリア
         session.clear()
 
         logger.info("セッションクリア完了")
@@ -1108,6 +1157,13 @@ if __name__ == '__main__':
     logger.info(f"環境: {env}")
     logger.info(f"デバッグモード: {app.config['DEBUG']}")
     logger.info(f"アップロードフォルダ: {app.config['UPLOAD_FOLDER']}")
+
+    # 古いセッションのクリーンアップ
+    try:
+        deleted_count = session_store.prune_expired()
+        logger.info(f"古いセッションを削除: {deleted_count}件")
+    except Exception as e:
+        logger.warning(f"セッションクリーンアップ中にエラー: {str(e)}")
 
     app.run(
         host='0.0.0.0',
