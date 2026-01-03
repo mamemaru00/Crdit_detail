@@ -16,6 +16,7 @@ Version: 1.0
 """
 
 from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
+from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
@@ -39,6 +40,13 @@ app = Flask(__name__)
 # 環境変数から環境名を取得（デフォルト: development）
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
+
+# Flask-Session設定（SQLiteセッションストアと連携）
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'data', 'sessions')
+Session(app)
 
 # CSRF保護の初期化
 csrf = CSRFProtect(app)
@@ -294,10 +302,14 @@ def upload():
             session_data['uploaded_filename'] = filename
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
-            # フォールバック: Cookieセッションに保存
-            session['uploaded_file_path'] = file_path
-            session['uploaded_filename'] = filename
+            logger.error(f"セッション保存失敗: {str(e)}")
+            # アップロードされたファイルを削除
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return jsonify(create_response(
+                'error',
+                message='セッションの保存に失敗しました。再度お試しください。'
+            )), 500
 
         logger.info(f"ファイルアップロード成功: {safe_filename} ({file_size} bytes)")
 
@@ -394,9 +406,11 @@ def preview():
             session_data['csv_data'] = result['details']
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
-            # フォールバック: Cookieセッションに保存
-            session['csv_data'] = result['details']
+            logger.error(f"セッション保存失敗: {str(e)}")
+            return jsonify(create_response(
+                'error',
+                message='セッションの保存に失敗しました。再度お試しください。'
+            )), 500
 
         return jsonify(create_response(
             'success',
@@ -597,9 +611,11 @@ def process():
             session_data['process_result'] = result_data
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.warning(f"セッションストア保存時にエラー: {str(e)}")
-            # フォールバック: Cookieセッションに保存
-            session['process_result'] = result_data
+            logger.error(f"セッション保存失敗: {str(e)}")
+            return jsonify(create_response(
+                'error',
+                message='処理結果の保存に失敗しました。再度お試しください。'
+            )), 500
 
         logger.info(
             f"CSV処理完了: "

@@ -125,7 +125,7 @@ class SessionStore:
     @contextmanager
     def _get_connection(self):
         """
-        データベース接続コンテキストマネージャー
+        データベース接続コンテキストマネージャー（PRAGMA設定付き）
 
         Yields:
             sqlite3.Connection: データベース接続オブジェクト
@@ -135,8 +135,17 @@ class SessionStore:
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=5.0)
             conn.row_factory = sqlite3.Row
+
+            # 各接続でPRAGMA設定を適用
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA wal_autocheckpoint=1000")
+            cursor.close()
+
             yield conn
             conn.commit()
         except sqlite3.Error as e:
