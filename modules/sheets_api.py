@@ -658,36 +658,101 @@ def batch_update_cells(
                     f"エラー={str(e)}"
                 )
 
-        # Step 2: 既存値を一括取得
-        cell_objects = []
-        for cell_info in cells_to_update:
-            try:
-                cell = worksheet.cell(cell_info['row'], cell_info['column'])
-                cell_info['old_value'] = float(cell.value) if cell.value and str(cell.value).strip() else 0.0
-                cell_objects.append((cell, cell_info))
-            except Exception as e:
-                failed_updates += 1
-                errors.append({
-                    'index': cell_info['index'],
-                    'update': cell_info,
-                    'error': f"既存値取得失敗: {str(e)}"
-                })
-                logger.error(
-                    f"[BATCH:ERROR] 既存値取得失敗（{cell_info['index']}/{total_updates}）: "
-                    f"row={cell_info['row']}, column={cell_info['column']}, エラー={str(e)}"
-                )
+        # Step 2: 既存値一括取得（worksheet.batch_get()使用）
+        logger.info(f"既存値を一括取得します（セル数: {len(cells_to_update)}）")
 
-        # Step 3: 新値を計算してセルオブジェクトに設定
+        existing_values_map = {}
+
+        try:
+            if cells_to_update:
+                # 2-1. セル範囲を特定
+                min_row = min(cell_info['row'] for cell_info in cells_to_update)
+                max_row = max(cell_info['row'] for cell_info in cells_to_update)
+                min_col = min(cell_info['column'] for cell_info in cells_to_update)
+                max_col = max(cell_info['column'] for cell_info in cells_to_update)
+
+                # 2-2. A1記法の範囲文字列を生成
+                import gspread.utils
+                range_name = f"{gspread.utils.rowcol_to_a1(min_row, min_col)}:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
+                logger.info(f"範囲取得: {range_name}")
+
+                # 2-3. 範囲一括取得（1回のAPI呼び出し）
+                batch_result = worksheet.batch_get([range_name])
+                existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
+
+                logger.info(f"既存値取得完了: {len(existing_values_2d)}行")
+
+                # 2-4. セル参照から既存値を抽出してマッピング
+                for cell_info in cells_to_update:
+                    row = cell_info['row']
+                    col = cell_info['column']
+                    relative_row = row - min_row
+                    relative_col = col - min_col
+
+                    # 2次元配列から値を取得
+                    try:
+                        if (existing_values_2d and
+                            relative_row < len(existing_values_2d) and
+                            relative_col < len(existing_values_2d[relative_row])):
+                            existing_value = existing_values_2d[relative_row][relative_col]
+                        else:
+                            existing_value = ""
+                    except (IndexError, TypeError):
+                        existing_value = ""
+
+                    # 数値変換
+                    try:
+                        cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
+                    except (ValueError, TypeError):
+                        cell_info['old_value'] = 0.0
+
+                    existing_values_map[(row, col)] = cell_info['old_value']
+                    logger.debug(f"セル({row},{col}): 既存値='{existing_value}' -> {cell_info['old_value']}")
+
+        except Exception as e:
+            logger.error(f"既存値一括取得エラー: {str(e)}")
+            # フォールバック: 個別取得（非推奨だが安全策）
+            logger.warning("フォールバック: 個別取得モードに切り替えます")
+            existing_values_map = {}
+            for cell_info in cells_to_update:
+                row = cell_info['row']
+                col = cell_info['column']
+                try:
+                    cell = worksheet.cell(row, col)
+                    existing_value = cell.value
+                    cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
+                    existing_values_map[(row, col)] = cell_info['old_value']
+                except Exception as cell_error:
+                    logger.error(f"セル({row},{col})取得エラー: {str(cell_error)}")
+                    cell_info['old_value'] = 0.0
+                    existing_values_map[(row, col)] = 0.0
+                    failed_updates += 1
+                    errors.append({
+                        'index': cell_info['index'],
+                        'update': cell_info,
+                        'error': f"既存値取得失敗: {str(cell_error)}"
+                    })
+
+        # Step 3: 新値計算とセルオブジェクト生成
         cells_for_batch = []
-        for cell, cell_info in cell_objects:
+        for cell_info in cells_to_update:
+            # 既存値がold_valueに設定されているか確認
+            if 'old_value' not in cell_info:
+                # フォールバック時にold_valueが設定されていない場合はスキップ
+                continue
+
             try:
+                row = cell_info['row']
+                col = cell_info['column']
+
                 # 新値計算
                 if cell_info['add_mode']:
                     new_value = cell_info['old_value'] + cell_info['amount']
                 else:
                     new_value = cell_info['amount']
 
-                # セルオブジェクトに新値を設定
+                # gspreadのCellオブジェクト作成
+                cell = worksheet.cell(row, col)
                 cell.value = new_value
                 cells_for_batch.append(cell)
 
@@ -698,12 +763,14 @@ def batch_update_cells(
                     'index': cell_info['index'],
                     'month': cell_info['month'],
                     'column_letter': cell_info['column_letter'],
-                    'row': cell_info['row'],
-                    'column': cell_info['column'],
+                    'row': row,
+                    'column': col,
                     'old_value': cell_info['old_value'],
                     'new_value': new_value,
                     'added_amount': cell_info['amount']
                 })
+
+                logger.debug(f"セル({row},{col}): {cell_info['old_value']} → {new_value}")
 
             except Exception as e:
                 failed_updates += 1
