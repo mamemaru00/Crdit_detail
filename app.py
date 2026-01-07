@@ -43,7 +43,7 @@ app.config.from_object(config[env])
 
 # Flask-Session設定（SQLiteセッションストアと連携）
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_PERMANENT'] = True  # 30分タイムアウト有効化
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'data', 'sessions')
 Session(app)
@@ -138,6 +138,39 @@ def create_response(status: str, data=None, message: str = None) -> dict:
         response['message'] = message
 
     return response
+
+
+def handle_error(e: Exception, user_message: str = "処理に失敗しました", status_code: int = 500) -> tuple:
+    """
+    統一エラーレスポンスヘルパー（情報漏洩対策）
+
+    例外の詳細情報をログに記録し、ユーザーには安全なメッセージのみを返します。
+    エラーIDを生成して、ログとユーザーメッセージを紐付けます。
+
+    Args:
+        e (Exception): 発生した例外
+        user_message (str): ユーザーに表示するメッセージ
+        status_code (int): HTTPステータスコード
+
+    Returns:
+        tuple: (JSONレスポンス, ステータスコード)
+
+    Example:
+        >>> return handle_error(e, "セッションの保存に失敗しました")
+    """
+    import uuid
+
+    # エラーIDを生成（ログとの紐付け用）
+    error_id = str(uuid.uuid4())[:8]
+
+    # 詳細エラーログ（内部ログのみ、ユーザーには露出しない）
+    logger.error(f"[ERROR-{error_id}] {type(e).__name__}: {str(e)}", exc_info=True)
+
+    # ユーザーメッセージ（エラーIDを含める）
+    return jsonify(create_response(
+        'error',
+        message=f"{user_message}（エラーID: {error_id}）"
+    )), status_code
 
 
 def cleanup_old_files(directory: str, max_age_hours: int = 24) -> int:
@@ -302,14 +335,10 @@ def upload():
             session_data['uploaded_filename'] = filename
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.error(f"セッション保存失敗: {str(e)}")
             # アップロードされたファイルを削除
             if os.path.exists(file_path):
                 os.remove(file_path)
-            return jsonify(create_response(
-                'error',
-                message='セッションの保存に失敗しました。再度お試しください。'
-            )), 500
+            return handle_error(e, "セッションの保存に失敗しました。再度お試しください")
 
         logger.info(f"ファイルアップロード成功: {safe_filename} ({file_size} bytes)")
 
@@ -333,11 +362,7 @@ def upload():
         ))
 
     except Exception as e:
-        logger.error(f"ファイルアップロード中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'ファイルのアップロードに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "ファイルのアップロードに失敗しました")
 
 
 @app.route('/preview', methods=['POST'])
@@ -406,11 +431,7 @@ def preview():
             session_data['csv_data'] = result['details']
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.error(f"セッション保存失敗: {str(e)}")
-            return jsonify(create_response(
-                'error',
-                message='セッションの保存に失敗しました。再度お試しください。'
-            )), 500
+            return handle_error(e, "セッションの保存に失敗しました。再度お試しください")
 
         return jsonify(create_response(
             'success',
@@ -431,11 +452,7 @@ def preview():
         )), 500
 
     except Exception as e:
-        logger.error(f"プレビュー取得中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'プレビュー取得に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "プレビュー取得に失敗しました")
 
 
 @app.route('/process', methods=['POST'])
@@ -611,11 +628,7 @@ def process():
             session_data['process_result'] = result_data
             session_store.save(session.sid, session_data)
         except Exception as e:
-            logger.error(f"セッション保存失敗: {str(e)}")
-            return jsonify(create_response(
-                'error',
-                message='処理結果の保存に失敗しました。再度お試しください。'
-            )), 500
+            return handle_error(e, "処理結果の保存に失敗しました。再度お試しください")
 
         logger.info(
             f"CSV処理完了: "
@@ -645,11 +658,7 @@ def process():
         )), 500
 
     except Exception as e:
-        logger.error(f"CSV処理中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'処理に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "処理に失敗しました")
 
 
 # ==================== マッピング管理API ====================
@@ -709,11 +718,7 @@ def mapping_list():
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング一覧取得中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピング一覧の取得に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピング一覧の取得に失敗しました")
 
 
 @app.route('/mapping/add', methods=['POST'])
@@ -798,11 +803,7 @@ def mapping_add():
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング追加中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの追加に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの追加に失敗しました")
 
 
 @app.route('/mapping/edit/<int:mapping_id>', methods=['PUT'])
@@ -878,11 +879,7 @@ def mapping_edit(mapping_id: int):
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング更新中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの更新に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの更新に失敗しました")
 
 
 @app.route('/mapping/delete/<int:mapping_id>', methods=['DELETE'])
@@ -935,11 +932,7 @@ def mapping_delete(mapping_id: int):
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング削除中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの削除に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの削除に失敗しました")
 
 
 # ==================== エラーハンドリング・クリーンアップ ====================
@@ -1043,11 +1036,7 @@ def clear_session():
         ))
 
     except Exception as e:
-        logger.error(f"セッションクリア中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'セッションのクリアに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "セッションのクリアに失敗しました")
 
 
 @app.route('/download/log', methods=['GET'])
@@ -1086,11 +1075,7 @@ def download_log():
         )
 
     except Exception as e:
-        logger.error(f"ログダウンロード中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'ログのダウンロードに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "ログのダウンロードに失敗しました")
 
 
 # ==================== セキュリティヘッダー設定 ====================
@@ -1182,7 +1167,7 @@ if __name__ == '__main__':
         logger.warning(f"セッションクリーンアップ中にエラー: {str(e)}")
 
     app.run(
-        host='0.0.0.0',
+        host='127.0.0.1',  # ローカル限定設定（セキュリティ強化）
         port=5000,
         debug=app.config['DEBUG']
     )

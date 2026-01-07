@@ -9,7 +9,7 @@ class Config:
 
     # ファイルアップロード設定
     UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB（10MB以上要件充足）
     ALLOWED_EXTENSIONS = {'csv'}
 
     # Google Sheets API 設定

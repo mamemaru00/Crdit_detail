@@ -86,7 +86,7 @@ class SessionStore:
                 cursor.execute("PRAGMA journal_mode=WAL")
                 cursor.execute("PRAGMA synchronous=NORMAL")
                 cursor.execute("PRAGMA wal_autocheckpoint=1000")
-                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA busy_timeout=30000")  # 30秒（性能要件に合わせる）
 
                 # sessionsテーブル作成
                 cursor.execute("""
@@ -142,7 +142,7 @@ class SessionStore:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA busy_timeout=30000")  # 30秒（性能要件に合わせる）
             cursor.execute("PRAGMA wal_autocheckpoint=1000")
             cursor.close()
 
