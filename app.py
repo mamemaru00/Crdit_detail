@@ -16,6 +16,7 @@ Version: 1.0
 """
 
 from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
+from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
@@ -40,6 +41,13 @@ app = Flask(__name__)
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
 
+# Flask-Session設定（SQLiteセッションストアと連携）
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = True  # 30分タイムアウト有効化
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'data', 'sessions')
+Session(app)
+
 # CSRF保護の初期化
 csrf = CSRFProtect(app)
 
@@ -49,6 +57,12 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # 必要なディレクトリを自動作成
 os.makedirs(Path(app.config['LOG_FILE']).parent, exist_ok=True)
 os.makedirs('data/backups', exist_ok=True)
+
+# SessionStore初期化
+from modules.session_store import SessionStore
+
+# セッションディレクトリ作成
+os.makedirs(Path(app.config['SESSION_DB_PATH']).parent, exist_ok=True)
 
 # ==================== ロギング設定 ====================
 
@@ -62,6 +76,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# SessionStoreインスタンス生成
+session_store = SessionStore(
+    db_path=app.config['SESSION_DB_PATH'],
+    ttl_seconds=app.config['SESSION_TTL_SECONDS']
+)
+
+logger.info(f"SessionStore初期化完了: {app.config['SESSION_DB_PATH']}")
 
 # ==================== 定数定義 ====================
 
@@ -116,6 +138,39 @@ def create_response(status: str, data=None, message: str = None) -> dict:
         response['message'] = message
 
     return response
+
+
+def handle_error(e: Exception, user_message: str = "処理に失敗しました", status_code: int = 500) -> tuple:
+    """
+    統一エラーレスポンスヘルパー（情報漏洩対策）
+
+    例外の詳細情報をログに記録し、ユーザーには安全なメッセージのみを返します。
+    エラーIDを生成して、ログとユーザーメッセージを紐付けます。
+
+    Args:
+        e (Exception): 発生した例外
+        user_message (str): ユーザーに表示するメッセージ
+        status_code (int): HTTPステータスコード
+
+    Returns:
+        tuple: (JSONレスポンス, ステータスコード)
+
+    Example:
+        >>> return handle_error(e, "セッションの保存に失敗しました")
+    """
+    import uuid
+
+    # エラーIDを生成（ログとの紐付け用）
+    error_id = str(uuid.uuid4())[:8]
+
+    # 詳細エラーログ（内部ログのみ、ユーザーには露出しない）
+    logger.error(f"[ERROR-{error_id}] {type(e).__name__}: {str(e)}", exc_info=True)
+
+    # ユーザーメッセージ（エラーIDを含める）
+    return jsonify(create_response(
+        'error',
+        message=f"{user_message}（エラーID: {error_id}）"
+    )), status_code
 
 
 def cleanup_old_files(directory: str, max_age_hours: int = 24) -> int:
@@ -196,8 +251,9 @@ def result():
     """
     logger.info("処理結果画面を表示")
 
-    # セッションから処理結果を取得
-    result_data = session.get('process_result')
+    # セッションストアから処理結果を取得
+    session_data = session_store.load(session.sid) or {}
+    result_data = session_data.get('process_result')
 
     if result_data is None:
         logger.warning("処理結果がセッションに存在しません。メイン画面にリダイレクトします")
@@ -209,7 +265,6 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -273,14 +328,28 @@ def upload():
         # 6. ファイルサイズ取得
         file_size = os.path.getsize(file_path)
 
-        # 7. セッションにファイルパスを保存
-        session['uploaded_file_path'] = file_path
-        session['uploaded_filename'] = filename
+        # 7. セッションストアにファイルパスを保存
+        try:
+            session_data = session_store.load(session.sid) or {}
+            session_data['uploaded_file_path'] = file_path
+            session_data['uploaded_filename'] = filename
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            # アップロードされたファイルを削除
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return handle_error(e, "セッションの保存に失敗しました。再度お試しください")
 
         logger.info(f"ファイルアップロード成功: {safe_filename} ({file_size} bytes)")
 
         # 8. 古いファイルのクリーンアップ（非同期的に実行）
         cleanup_old_files(app.config['UPLOAD_FOLDER'])
+
+        # 9. 古いセッションのクリーンアップ
+        try:
+            session_store.prune_expired()
+        except Exception as e:
+            logger.warning(f"セッションクリーンアップ中にエラー: {str(e)}")
 
         return jsonify(create_response(
             'success',
@@ -293,15 +362,10 @@ def upload():
         ))
 
     except Exception as e:
-        logger.error(f"ファイルアップロード中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'ファイルのアップロードに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "ファイルのアップロードに失敗しました")
 
 
 @app.route('/preview', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -331,8 +395,9 @@ def preview():
     logger.info("CSVプレビュー取得処理を開始")
 
     try:
-        # 1. セッションからファイルパス取得
-        file_path = session.get('uploaded_file_path')
+        # 1. セッションストアからファイルパス取得
+        session_data = session_store.load(session.sid) or {}
+        file_path = session_data.get('uploaded_file_path')
 
         if not file_path:
             logger.warning("ファイルがアップロードされていません")
@@ -361,8 +426,12 @@ def preview():
             f"合計{result['summary']['total_amount']:,}円"
         )
 
-        # 4. セッションに全データを保存（後続のprocess処理用）
-        session['csv_data'] = result['details']
+        # 4. セッションストアに全データを保存（後続のprocess処理用）
+        try:
+            session_data['csv_data'] = result['details']
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            return handle_error(e, "セッションの保存に失敗しました。再度お試しください")
 
         return jsonify(create_response(
             'success',
@@ -383,15 +452,10 @@ def preview():
         )), 500
 
     except Exception as e:
-        logger.error(f"プレビュー取得中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'プレビュー取得に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "プレビュー取得に失敗しました")
 
 
 @app.route('/process', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.2でフロントエンド実装後にCSRF保護を有効化
 def process():
     """
     CSVデータを処理してGoogle Sheetsに反映
@@ -455,11 +519,12 @@ def process():
                 message='対象年を正しく指定してください'
             )), 400
 
-        # 3. セッションからCSVデータ取得
-        csv_data = session.get('csv_data')
+        # 3. セッションストアからCSVデータ取得
+        session_data = session_store.load(session.sid) or {}
+        csv_data = session_data.get('csv_data')
 
         if not csv_data:
-            logger.warning("CSVデータがセッションに存在しません")
+            logger.warning("CSVデータがセッションストアに存在しません")
             return jsonify(create_response(
                 'error',
                 message='先にCSVファイルをプレビューしてください'
@@ -558,8 +623,12 @@ def process():
             'target_year': target_year
         }
 
-        # 11. セッションに処理結果を保存
-        session['process_result'] = result_data
+        # 11. セッションストアに処理結果を保存
+        try:
+            session_data['process_result'] = result_data
+            session_store.save(session.sid, session_data)
+        except Exception as e:
+            return handle_error(e, "処理結果の保存に失敗しました。再度お試しください")
 
         logger.info(
             f"CSV処理完了: "
@@ -589,11 +658,7 @@ def process():
         )), 500
 
     except Exception as e:
-        logger.error(f"CSV処理中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'処理に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "処理に失敗しました")
 
 
 # ==================== マッピング管理API ====================
@@ -653,11 +718,7 @@ def mapping_list():
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング一覧取得中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピング一覧の取得に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピング一覧の取得に失敗しました")
 
 
 @app.route('/mapping/add', methods=['POST'])
@@ -742,11 +803,7 @@ def mapping_add():
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング追加中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの追加に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの追加に失敗しました")
 
 
 @app.route('/mapping/edit/<int:mapping_id>', methods=['PUT'])
@@ -822,11 +879,7 @@ def mapping_edit(mapping_id: int):
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング更新中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの更新に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの更新に失敗しました")
 
 
 @app.route('/mapping/delete/<int:mapping_id>', methods=['DELETE'])
@@ -879,11 +932,7 @@ def mapping_delete(mapping_id: int):
         )), 500
 
     except Exception as e:
-        logger.error(f"マッピング削除中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'マッピングの削除に失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "マッピングの削除に失敗しました")
 
 
 # ==================== エラーハンドリング・クリーンアップ ====================
@@ -964,13 +1013,19 @@ def clear_session():
     logger.info("セッションクリア処理を開始")
 
     try:
+        # セッションストアからファイルパス取得
+        session_data = session_store.load(session.sid) or {}
+        file_path = session_data.get('uploaded_file_path')
+
         # アップロードファイルの削除
-        file_path = session.get('uploaded_file_path')
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
             logger.info(f"アップロードファイルを削除: {file_path}")
 
-        # セッションクリア
+        # セッションストアからデータ削除
+        session_store.delete(session.sid)
+
+        # Cookieセッションもクリア
         session.clear()
 
         logger.info("セッションクリア完了")
@@ -981,11 +1036,7 @@ def clear_session():
         ))
 
     except Exception as e:
-        logger.error(f"セッションクリア中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'セッションのクリアに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "セッションのクリアに失敗しました")
 
 
 @app.route('/download/log', methods=['GET'])
@@ -1024,11 +1075,7 @@ def download_log():
         )
 
     except Exception as e:
-        logger.error(f"ログダウンロード中にエラーが発生: {str(e)}", exc_info=True)
-        return jsonify(create_response(
-            'error',
-            message=f'ログのダウンロードに失敗しました: {str(e)}'
-        )), 500
+        return handle_error(e, "ログのダウンロードに失敗しました")
 
 
 # ==================== セキュリティヘッダー設定 ====================
@@ -1112,8 +1159,15 @@ if __name__ == '__main__':
     logger.info(f"デバッグモード: {app.config['DEBUG']}")
     logger.info(f"アップロードフォルダ: {app.config['UPLOAD_FOLDER']}")
 
+    # 古いセッションのクリーンアップ
+    try:
+        deleted_count = session_store.prune_expired()
+        logger.info(f"古いセッションを削除: {deleted_count}件")
+    except Exception as e:
+        logger.warning(f"セッションクリーンアップ中にエラー: {str(e)}")
+
     app.run(
-        host='0.0.0.0',
+        host='127.0.0.1',  # ローカル限定設定（セキュリティ強化）
         port=5000,
         debug=app.config['DEBUG']
     )

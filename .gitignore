@@ -94,6 +94,11 @@ docker-compose.override.yml
 # アプリケーションデータ（バックアップファイル除外）
 data/backups/*.json
 
+# セッションストア
+data/sessions/*.db
+data/sessions/*.db-shm
+data/sessions/*.db-wal
+
 # その他
 *.sqlite
 *.db

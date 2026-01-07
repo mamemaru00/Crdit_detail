@@ -9,7 +9,7 @@ class Config:
 
     # ファイルアップロード設定
     UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB（10MB以上要件充足）
     ALLOWED_EXTENSIONS = {'csv'}
 
     # Google Sheets API 設定
@@ -23,6 +23,11 @@ class Config:
     DEFAULT_YEAR = int(os.environ.get('DEFAULT_YEAR', '2025'))
     DEFAULT_COLUMN = 'B'
     CSV_ENCODING = 'Shift_JIS'
+
+    # セッションストア設定
+    SESSION_DB_PATH = os.path.join('data', 'sessions', 'sessions.db')
+    SESSION_TTL_SECONDS = int(os.environ.get('SESSION_TTL_SECONDS', '1800'))  # 30分
+    SESSION_CLEANUP_INTERVAL_HOURS = int(os.environ.get('SESSION_CLEANUP_INTERVAL_HOURS', '6'))  # 6時間
 
     # API 設定
     API_TIMEOUT = 30

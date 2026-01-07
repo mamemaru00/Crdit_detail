@@ -14,8 +14,12 @@ services:
     volumes:
       # 認証情報（読み取り専用）
       - ./config:/app/config:ro
-      # アプリケーションデータ（読み書き可能）
-      - ./data:/app/data
+      # セッションデータ（名前付きボリューム、WAL対応）
+      - session_data:/app/data/sessions
+      # マッピングデータ（読み書き可能）
+      - ./data/mapping.json:/app/data/mapping.json
+      # バックアップディレクトリ（読み書き可能）
+      - ./data/backups:/app/data/backups
       # アップロードファイル（読み書き可能）
       - ./uploads:/app/uploads
       # ログファイル（読み書き可能）
@@ -47,6 +51,9 @@ services:
 
     networks:
       - aeon-network
+
+volumes:
+  session_data:
 
 networks:
   aeon-network:
