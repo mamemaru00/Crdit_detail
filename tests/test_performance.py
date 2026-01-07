@@ -314,7 +314,7 @@ def test_batch_update_performance():
 def test_batch_get_performance():
     """worksheet.batch_get()の性能測定（1000セル一括取得が5秒以内）"""
     from unittest.mock import MagicMock, patch
-    from modules.sheets_api import SheetsAPI
+    from modules import sheets_api
     import time
 
     # モックワークシート作成
@@ -345,10 +345,8 @@ def test_batch_get_performance():
 def test_batch_update_with_batch_get_integration():
     """batch_get() + update_cells()の統合性能測定"""
     from unittest.mock import MagicMock, patch
-    from modules.sheets_api import SheetsAPI
+    from modules import sheets_api
     import time
-
-    sheets_api = SheetsAPI()
 
     # モックワークシート
     mock_worksheet = MagicMock()
