@@ -16,7 +16,6 @@ Version: 1.0
 """
 
 from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
-from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
@@ -40,13 +39,6 @@ app = Flask(__name__)
 # 環境変数から環境名を取得（デフォルト: development）
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
-
-# Flask-Session設定（SQLiteセッションストアと連携）
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = True  # 30分タイムアウト有効化
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'data', 'sessions')
-Session(app)
 
 # CSRF保護の初期化
 csrf = CSRFProtect(app)
@@ -722,7 +714,6 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.3でマッピング管理画面実装後にCSRF保護を有効化
 def mapping_add():
     """
     新規マッピングを追加

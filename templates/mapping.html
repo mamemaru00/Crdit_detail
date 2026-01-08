@@ -3,33 +3,377 @@
 {% block title %}マッピング管理 - {{ super() }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-10">
-    <div class="alert alert-info" role="alert">
-      <i class="bi bi-info-circle"></i>
-      <strong>開発中</strong>: このページはStep 3.3で実装予定です。
-    </div>
+<div class="container py-4">
+  <h1 class="mb-4">
+    <i class="bi bi-list-ul"></i> 店舗カテゴリマッピング管理
+  </h1>
 
-    <div class="card">
-      <div class="card-header bg-primary text-white">
-        <h1 class="h4 mb-0">
-          <i class="bi bi-list-ul"></i> マッピング管理画面
-        </h1>
-      </div>
-      <div class="card-body">
-        <p>店舗名とカテゴリの対応関係を管理します。</p>
-
-        <h2 class="h5 mt-4">実装予定機能（Step 3.3）</h2>
-        <ul>
-          <li>店舗名検索機能</li>
-          <li>マッピング一覧テーブル表示</li>
-          <li>新規マッピング登録フォーム</li>
-          <li>既存マッピング編集・削除機能</li>
-          <li>パターンマッチ種別選択（完全一致/前方一致/部分一致）</li>
-          <li>カテゴリ選択ドロップダウン</li>
-        </ul>
+  <!-- 検索エリア -->
+  <section id="searchArea" class="card mb-4" aria-labelledby="searchTitle">
+    <div class="card-header bg-primary text-white">
+      <h2 class="h5 mb-0" id="searchTitle">
+        <i class="bi bi-search"></i> 検索
+      </h2>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-8">
+          <label for="searchInput" class="form-label visually-hidden">店舗名で検索</label>
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              type="text"
+              class="form-control"
+              id="searchInput"
+              placeholder="店舗名で検索..."
+              aria-label="店舗名で検索"
+            >
+            <button type="button" class="btn btn-outline-secondary" id="clearSearchBtn">
+              <i class="bi bi-x-circle"></i> クリア
+            </button>
+          </div>
+        </div>
+        <div class="col-md-4 text-end">
+          <p class="mb-0 mt-2 text-muted">
+            <span id="displayCount">0</span> / <span id="totalCount">0</span> 件表示
+          </p>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- マッピング一覧エリア -->
+  <section id="mappingListArea" class="card mb-4" aria-labelledby="listTitle">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+      <h2 class="h5 mb-0" id="listTitle">
+        <i class="bi bi-table"></i> マッピング一覧
+      </h2>
+      <button type="button" class="btn btn-light btn-sm" id="addMappingBtn">
+        <i class="bi bi-plus-circle"></i> 新規追加
+      </button>
+    </div>
+    <div class="card-body">
+      <!-- ローディング表示 -->
+      <div id="loadingIndicator" class="text-center py-5" role="status">
+        <div class="spinner-border text-primary" aria-hidden="true"></div>
+        <p class="mt-2 text-muted">読み込み中...</p>
+      </div>
+
+      <!-- マッピングテーブル -->
+      <div id="mappingTableContainer" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover" role="table" id="mappingTable">
+            <caption class="visually-hidden">店舗カテゴリマッピング一覧</caption>
+            <thead class="table-light">
+              <tr>
+                <th scope="col" style="width: 5%;">ID</th>
+                <th scope="col" style="width: 25%;">店舗名パターン</th>
+                <th scope="col" style="width: 15%;">一致方法</th>
+                <th scope="col" style="width: 20%;">カテゴリ</th>
+                <th scope="col" style="width: 10%;">列</th>
+                <th scope="col" style="width: 25%;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="mappingTableBody">
+              <!-- JavaScriptで動的生成 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ページング -->
+        <nav aria-label="ページネーション" id="paginationContainer">
+          <ul class="pagination justify-content-center" id="pagination">
+            <!-- JavaScriptで動的生成 -->
+          </ul>
+        </nav>
+      </div>
+
+      <!-- データなし表示 -->
+      <div id="noDataMessage" class="text-center py-5 d-none">
+        <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+        <p class="text-muted mt-3">マッピングデータがありません</p>
+        <button type="button" class="btn btn-primary" id="addFirstMappingBtn">
+          <i class="bi bi-plus-circle"></i> 最初のマッピングを追加
+        </button>
+      </div>
+
+      <!-- インポート・エクスポートボタン（将来実装用） -->
+      <div class="text-center mt-4">
+        <button type="button" class="btn btn-outline-secondary" disabled title="将来実装予定">
+          <i class="bi bi-upload"></i> インポート
+        </button>
+        <button type="button" class="btn btn-outline-secondary ms-2" disabled title="将来実装予定">
+          <i class="bi bi-download"></i> エクスポート
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 新規追加フォームエリア（初期非表示） -->
+  <section id="addFormArea" class="card mb-4 d-none" aria-labelledby="addFormTitle">
+    <div class="card-header bg-info text-white">
+      <h2 class="h5 mb-0" id="addFormTitle">
+        <i class="bi bi-plus-circle"></i> 新規マッピング追加
+      </h2>
+    </div>
+    <div class="card-body">
+      <form id="addMappingForm" novalidate>
+        <!-- 店舗名パターン -->
+        <div class="mb-3">
+          <label for="storeNameInput" class="form-label">
+            店舗名パターン <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="storeNameInput"
+            name="store_name"
+            placeholder="例: ユシンヤ, AMAZON, スイカ"
+            required
+            maxlength="100"
+            aria-describedby="storeNameHelp"
+          >
+          <div id="storeNameHelp" class="form-text">
+            完全一致・前方一致・部分一致・キーワード一致で検索される店舗名パターン
+          </div>
+          <div class="invalid-feedback">
+            店舗名パターンを入力してください
+          </div>
+        </div>
+
+        <!-- 一致方法 -->
+        <div class="mb-3">
+          <label for="matchTypeSelect" class="form-label">
+            一致方法 <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="matchTypeSelect" name="match_type" required>
+            <option value="">選択してください</option>
+            <option value="exact">完全一致</option>
+            <option value="prefix">前方一致</option>
+            <option value="partial" selected>部分一致</option>
+            <option value="keyword">キーワード一致</option>
+          </select>
+          <div class="invalid-feedback">
+            一致方法を選択してください
+          </div>
+        </div>
+
+        <!-- カテゴリ -->
+        <div class="mb-3">
+          <label for="categorySelect" class="form-label">
+            カテゴリ <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="categorySelect" name="category" required>
+            <option value="">選択してください</option>
+            <option value="支払額">支払額（デフォルト）</option>
+            <option value="外食費">外食費</option>
+            <option value="日用品費">日用品費</option>
+            <option value="美容費">美容費</option>
+            <option value="衣類費">衣類費</option>
+            <option value="娯楽費">娯楽費</option>
+            <option value="ガソリン代">ガソリン代</option>
+            <option value="医療費">医療費</option>
+            <option value="書籍費">書籍費</option>
+            <option value="雑費">雑費</option>
+            <option value="教育費">教育費</option>
+            <option value="旅行費">旅行費</option>
+            <option value="交通費">交通費</option>
+            <option value="通信費">通信費</option>
+            <option value="保険料">保険料</option>
+            <option value="税金">税金</option>
+            <option value="光熱費">光熱費</option>
+            <option value="家賃">家賃</option>
+            <option value="駐車場代">駐車場代</option>
+            <option value="その他固定費">その他固定費</option>
+            <option value="予備">予備</option>
+          </select>
+          <div class="invalid-feedback">
+            カテゴリを選択してください
+          </div>
+        </div>
+
+        <!-- 列番号 -->
+        <div class="mb-3">
+          <label for="columnSelect" class="form-label">
+            列番号 <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="columnSelect" name="column" required>
+            <option value="">選択してください</option>
+            <option value="B">B列 - 支払額</option>
+            <option value="C">C列 - 外食費</option>
+            <option value="D">D列 - 日用品費</option>
+            <option value="E">E列 - 美容費</option>
+            <option value="F">F列 - 衣類費</option>
+            <option value="G">G列 - 娯楽費</option>
+            <option value="H">H列 - ガソリン代</option>
+            <option value="I">I列 - 医療費</option>
+            <option value="J">J列 - 書籍費</option>
+            <option value="K">K列 - 雑費</option>
+            <option value="L">L列 - 教育費</option>
+            <option value="M">M列 - 旅行費</option>
+            <option value="N">N列 - 交通費</option>
+            <option value="O">O列 - 通信費</option>
+            <option value="P">P列 - 保険料</option>
+            <option value="Q">Q列 - 税金</option>
+            <option value="R">R列 - 光熱費</option>
+            <option value="S">S列 - 家賃</option>
+            <option value="T">T列 - 駐車場代</option>
+            <option value="U">U列 - その他固定費</option>
+            <option value="V">V列 - 予備</option>
+          </select>
+          <div class="invalid-feedback">
+            列番号を選択してください
+          </div>
+        </div>
+
+        <!-- ボタン -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+          <button type="button" class="btn btn-secondary" id="cancelAddBtn">
+            <i class="bi bi-x-circle"></i> キャンセル
+          </button>
+          <button type="submit" class="btn btn-primary" id="submitAddBtn">
+            <i class="bi bi-check-circle"></i> 登録
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- 編集フォームエリア（初期非表示） -->
+  <section id="editFormArea" class="card mb-4 d-none" aria-labelledby="editFormTitle">
+    <div class="card-header bg-warning">
+      <h2 class="h5 mb-0" id="editFormTitle">
+        <i class="bi bi-pencil"></i> マッピング編集
+      </h2>
+    </div>
+    <div class="card-body">
+      <form id="editMappingForm" novalidate>
+        <input type="hidden" id="editMappingId" name="id">
+
+        <!-- 店舗名パターン -->
+        <div class="mb-3">
+          <label for="editStoreNameInput" class="form-label">
+            店舗名パターン <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="editStoreNameInput"
+            name="store_name"
+            required
+            maxlength="100"
+          >
+          <div class="invalid-feedback">
+            店舗名パターンを入力してください
+          </div>
+        </div>
+
+        <!-- 一致方法 -->
+        <div class="mb-3">
+          <label for="editMatchTypeSelect" class="form-label">
+            一致方法 <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="editMatchTypeSelect" name="match_type" required>
+            <option value="exact">完全一致</option>
+            <option value="prefix">前方一致</option>
+            <option value="partial">部分一致</option>
+            <option value="keyword">キーワード一致</option>
+          </select>
+          <div class="invalid-feedback">
+            一致方法を選択してください
+          </div>
+        </div>
+
+        <!-- カテゴリ -->
+        <div class="mb-3">
+          <label for="editCategorySelect" class="form-label">
+            カテゴリ <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="editCategorySelect" name="category" required>
+            <option value="支払額">支払額（デフォルト）</option>
+            <option value="外食費">外食費</option>
+            <option value="日用品費">日用品費</option>
+            <option value="美容費">美容費</option>
+            <option value="衣類費">衣類費</option>
+            <option value="娯楽費">娯楽費</option>
+            <option value="ガソリン代">ガソリン代</option>
+            <option value="医療費">医療費</option>
+            <option value="書籍費">書籍費</option>
+            <option value="雑費">雑費</option>
+            <option value="教育費">教育費</option>
+            <option value="旅行費">旅行費</option>
+            <option value="交通費">交通費</option>
+            <option value="通信費">通信費</option>
+            <option value="保険料">保険料</option>
+            <option value="税金">税金</option>
+            <option value="光熱費">光熱費</option>
+            <option value="家賃">家賃</option>
+            <option value="駐車場代">駐車場代</option>
+            <option value="その他固定費">その他固定費</option>
+            <option value="予備">予備</option>
+          </select>
+          <div class="invalid-feedback">
+            カテゴリを選択してください
+          </div>
+        </div>
+
+        <!-- 列番号 -->
+        <div class="mb-3">
+          <label for="editColumnSelect" class="form-label">
+            列番号 <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="editColumnSelect" name="column" required>
+            <option value="B">B列 - 支払額</option>
+            <option value="C">C列 - 外食費</option>
+            <option value="D">D列 - 日用品費</option>
+            <option value="E">E列 - 美容費</option>
+            <option value="F">F列 - 衣類費</option>
+            <option value="G">G列 - 娯楽費</option>
+            <option value="H">H列 - ガソリン代</option>
+            <option value="I">I列 - 医療費</option>
+            <option value="J">J列 - 書籍費</option>
+            <option value="K">K列 - 雑費</option>
+            <option value="L">L列 - 教育費</option>
+            <option value="M">M列 - 旅行費</option>
+            <option value="N">N列 - 交通費</option>
+            <option value="O">O列 - 通信費</option>
+            <option value="P">P列 - 保険料</option>
+            <option value="Q">Q列 - 税金</option>
+            <option value="R">R列 - 光熱費</option>
+            <option value="S">S列 - 家賃</option>
+            <option value="T">T列 - 駐車場代</option>
+            <option value="U">U列 - その他固定費</option>
+            <option value="V">V列 - 予備</option>
+          </select>
+          <div class="invalid-feedback">
+            列番号を選択してください
+          </div>
+        </div>
+
+        <!-- ボタン -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+          <button type="button" class="btn btn-secondary" id="cancelEditBtn">
+            <i class="bi bi-x-circle"></i> キャンセル
+          </button>
+          <button type="submit" class="btn btn-warning" id="submitEditBtn">
+            <i class="bi bi-check-circle"></i> 更新
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
 </div>
+{% endblock %}
+
+{% block modals %}
+{{ super() }}
+
+<!-- 削除確認モーダル（base.htmlのものを拡張） -->
+<!-- deleteConfirmModal は base.html で定義済み -->
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mapping.js') }}"></script>
 {% endblock %}
