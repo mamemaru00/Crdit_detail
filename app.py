@@ -722,7 +722,6 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
-@csrf.exempt  # TODO: Step 3.3でマッピング管理画面実装後にCSRF保護を有効化
 def mapping_add():
     """
     新規マッピングを追加
