@@ -42,6 +42,7 @@ from functools import wraps
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Spreadsheet, Worksheet
+from gspread.cell import Cell
 
 # ==================== ロガー設定 ====================
 
@@ -711,49 +712,106 @@ def batch_update_cells(
 
         except Exception as e:
             logger.error(f"既存値一括取得エラー: {str(e)}")
-            # フォールバック: 個別取得（非推奨だが安全策）
-            logger.warning("フォールバック: 個別取得モードに切り替えます")
-            existing_values_map = {}
-            for cell_info in cells_to_update:
-                row = cell_info['row']
-                col = cell_info['column']
-                try:
-                    cell = worksheet.cell(row, col)
-                    existing_value = cell.value
-                    cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
-                    existing_values_map[(row, col)] = cell_info['old_value']
-                except Exception as cell_error:
-                    logger.error(f"セル({row},{col})取得エラー: {str(cell_error)}")
-                    cell_info['old_value'] = 0.0
-                    existing_values_map[(row, col)] = 0.0
-                    failed_updates += 1
-                    errors.append({
-                        'index': cell_info['index'],
-                        'update': cell_info,
-                        'error': f"既存値取得失敗: {str(cell_error)}"
-                    })
+            logger.warning("フォールバック: 範囲分割モードに切り替えます")
 
-        # Step 3: 新値計算とセルオブジェクト生成
+            # セルを小範囲（100セルずつ）に分割
+            chunk_size = 100
+            for i in range(0, len(cells_to_update), chunk_size):
+                chunk = cells_to_update[i:i+chunk_size]
+
+                try:
+                    # 小範囲の範囲計算
+                    min_row = min(cell_info['row'] for cell_info in chunk)
+                    max_row = max(cell_info['row'] for cell_info in chunk)
+                    min_col = min(cell_info['column'] for cell_info in chunk)
+                    max_col = max(cell_info['column'] for cell_info in chunk)
+
+                    # 小範囲でbatch_get()を再試行
+                    import gspread.utils
+                    range_name = f"{gspread.utils.rowcol_to_a1(min_row, min_col)}:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
+                    logger.info(f"範囲分割再試行（chunk {i//chunk_size + 1}）: {range_name}")
+
+                    batch_result = worksheet.batch_get([range_name])
+                    existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
+
+                    # 値を抽出
+                    for cell_info in chunk:
+                        row = cell_info['row']
+                        col = cell_info['column']
+                        relative_row = row - min_row
+                        relative_col = col - min_col
+
+                        try:
+                            if (existing_values_2d and
+                                relative_row < len(existing_values_2d) and
+                                relative_col < len(existing_values_2d[relative_row])):
+                                existing_value = existing_values_2d[relative_row][relative_col]
+                            else:
+                                existing_value = ""
+                        except (IndexError, TypeError):
+                            existing_value = ""
+
+                        # 数値変換
+                        try:
+                            cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
+                        except (ValueError, TypeError):
+                            cell_info['old_value'] = 0.0
+
+                        logger.debug(f"セル({row},{col}): 既存値={cell_info['old_value']}")
+
+                except Exception as chunk_error:
+                    logger.error(f"範囲分割フォールバックエラー（chunk {i//chunk_size + 1}）: {str(chunk_error)}")
+                    logger.warning(f"最終手段: chunk {i//chunk_size + 1}のみ個別取得モードに切り替え")
+
+                    # 最終手段: この小範囲のみ個別取得
+                    for cell_info in chunk:
+                        row = cell_info['row']
+                        col = cell_info['column']
+                        try:
+                            cell = worksheet.cell(row, col)
+                            existing_value = cell.value
+                            cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
+                            logger.debug(f"セル({row},{col}): 個別取得 既存値={cell_info['old_value']}")
+                        except Exception as cell_error:
+                            logger.error(f"セル({row},{col})取得エラー: {str(cell_error)}")
+                            cell_info['old_value'] = 0.0
+                            failed_updates += 1
+                            errors.append({
+                                'index': cell_info.get('index', 'unknown'),
+                                'update': cell_info,
+                                'error': f"既存値取得失敗: {str(cell_error)}"
+                            })
+
+        # Step 3: 新値計算とセルオブジェクト生成（API呼び出しなし）
+        logger.info(f"新値計算を開始します（セル数: {len(cells_to_update)}）")
+
         cells_for_batch = []
+
         for cell_info in cells_to_update:
-            # 既存値がold_valueに設定されているか確認
+            # old_valueはStep 2で既に設定済み
             if 'old_value' not in cell_info:
-                # フォールバック時にold_valueが設定されていない場合はスキップ
+                logger.warning(f"セル({cell_info.get('row')},{cell_info.get('column')}): old_value未設定、スキップ")
+                failed_updates += 1
+                errors.append({
+                    'index': cell_info.get('index', 'unknown'),
+                    'update': cell_info,
+                    'error': 'old_value未設定'
+                })
                 continue
 
             try:
                 row = cell_info['row']
                 col = cell_info['column']
 
-                # 新値計算
+                # 新値計算（加算モード対応）
                 if cell_info['add_mode']:
                     new_value = cell_info['old_value'] + cell_info['amount']
                 else:
                     new_value = cell_info['amount']
 
-                # gspreadのCellオブジェクト作成
-                cell = worksheet.cell(row, col)
-                cell.value = new_value
+                # gspread.cell.Cellを自前生成（HTTP呼び出しなし）
+                # 重要: worksheet.cell()を呼ばずに直接Cellインスタンスを作成
+                cell = Cell(row, col, new_value)
                 cells_for_batch.append(cell)
 
                 # 成功情報を記録
@@ -775,14 +833,13 @@ def batch_update_cells(
             except Exception as e:
                 failed_updates += 1
                 errors.append({
-                    'index': cell_info['index'],
+                    'index': cell_info.get('index', 'unknown'),
                     'update': cell_info,
                     'error': f"新値計算失敗: {str(e)}"
                 })
-                logger.error(
-                    f"[BATCH:ERROR] 新値計算失敗（{cell_info['index']}/{total_updates}）: "
-                    f"エラー={str(e)}"
-                )
+                logger.error(f"[BATCH:ERROR] 新値計算失敗（{cell_info.get('index', 'unknown')}/{len(cells_to_update)}）: エラー={str(e)}")
+
+        logger.info(f"新値計算完了: 成功={successful_updates}件, 失敗={failed_updates}件")
 
         # Step 4: 一括更新実行（gspreadのupdate_cells）
         updated_cells = 0
