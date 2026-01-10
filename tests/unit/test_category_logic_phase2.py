@@ -92,7 +92,7 @@ def test_missing_fields():
     }
 
     # 一時ファイル作成
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
         json.dump(invalid_data, f, ensure_ascii=False, indent=2)
         temp_file = f.name
 
