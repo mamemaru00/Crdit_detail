@@ -189,7 +189,7 @@ function filterMappings(searchText) {
   } else {
     // 店舗名パターンで部分一致検索
     filteredMappings = allMappings.filter(mapping => {
-      return mapping.store_name.toLowerCase().includes(lowerSearchText);
+      return mapping.pattern.toLowerCase().includes(lowerSearchText);
     });
   }
 
@@ -257,7 +257,7 @@ function createMappingRow(mapping) {
 
   // 店舗名パターン列
   const storeNameCell = $('<td>');
-  storeNameCell.text(mapping.store_name);
+  storeNameCell.text(mapping.pattern);
   row.append(storeNameCell);
 
   // 一致方法列
@@ -282,7 +282,7 @@ function createMappingRow(mapping) {
   // 編集ボタン
   const editBtn = $('<button type="button" class="btn btn-sm btn-warning me-2">');
   editBtn.html('<i class="bi bi-pencil"></i> 編集');
-  editBtn.attr('aria-label', mapping.store_name + 'を編集');
+  editBtn.attr('aria-label', mapping.pattern + 'を編集');
   editBtn.on('click', function() {
     showEditForm(mapping);
   });
@@ -291,9 +291,9 @@ function createMappingRow(mapping) {
   // 削除ボタン
   const deleteBtn = $('<button type="button" class="btn btn-sm btn-danger">');
   deleteBtn.html('<i class="bi bi-trash"></i> 削除');
-  deleteBtn.attr('aria-label', mapping.store_name + 'を削除');
+  deleteBtn.attr('aria-label', mapping.pattern + 'を削除');
   deleteBtn.attr('data-mapping-id', mapping.id);
-  deleteBtn.attr('data-store-name', mapping.store_name);
+  deleteBtn.attr('data-store-name', mapping.pattern);
   deleteBtn.attr('data-bs-toggle', 'modal');
   deleteBtn.attr('data-bs-target', '#deleteConfirmModal');
   deleteBtn.on('click', function() {
@@ -419,7 +419,7 @@ function handleAddMapping() {
 
   // フォームデータ取得
   const formData = {
-    store_name: $('#storeNameInput').val().trim(),
+    pattern: $('#storeNameInput').val().trim(),
     match_type: $('#matchTypeSelect').val(),
     category: $('#categorySelect').val(),
     column: $('#columnSelect').val()
@@ -492,7 +492,7 @@ function showEditForm(mapping) {
 
   // フォームにデータを設定
   $('#editMappingId').val(mapping.id);
-  $('#editStoreNameInput').val(mapping.store_name);
+  $('#editStoreNameInput').val(mapping.pattern);
   $('#editMatchTypeSelect').val(mapping.match_type);
   $('#editCategorySelect').val(mapping.category);
   $('#editColumnSelect').val(mapping.column);
@@ -537,7 +537,7 @@ function handleEditMapping() {
 
   // フォームデータ取得
   const formData = {
-    store_name: $('#editStoreNameInput').val().trim(),
+    pattern: $('#editStoreNameInput').val().trim(),
     match_type: $('#editMatchTypeSelect').val(),
     category: $('#editCategorySelect').val(),
     column: $('#editColumnSelect').val()
@@ -608,7 +608,7 @@ function handleEditMapping() {
  */
 function prepareDeleteModal(mapping) {
   // モーダルに店舗名を表示
-  $('#deleteStoreName').text(mapping.store_name);
+  $('#deleteStoreName').text(mapping.pattern);
 
   // 削除ボタンにデータ属性を設定
   $('#confirmDeleteBtn').attr('data-mapping-id', mapping.id);
