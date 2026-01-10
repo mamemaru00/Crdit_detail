@@ -78,6 +78,11 @@ PRIORITY_DEFAULT = 999   # デフォルト優先度（マッチしない場合�
 MIN_PRIORITY = 1
 MAX_PRIORITY = 4
 
+# エラーメッセージでの型表記を上書きするマッピング
+TYPE_NAME_OVERRIDES = {
+    int: "整数",
+}
+
 
 # ==================== 型定義（TypedDict） ====================
 
@@ -308,11 +313,12 @@ def _validate_field_type(entry: dict, field_name: str, expected_type: type,
         MappingValidationError: 型が一致しない、または空の場合
     """
     value = entry.get(field_name)
+    type_label = TYPE_NAME_OVERRIDES.get(expected_type, expected_type.__name__)
 
     # 型チェック
     if not isinstance(value, expected_type):
         raise MappingValidationError(
-            f"{field_name}フィールドは{expected_type.__name__}である必要があります: {value}",
+            f"{field_name}フィールドは{type_label}である必要があります: {value}",
             details={'field': field_name, 'value': value, 'type': type(value).__name__}
         )
 

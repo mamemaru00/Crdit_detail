@@ -553,6 +553,19 @@ def _save_mapping_data(data: MappingData) -> None:
                 details={'path': str(temp_path), 'error': str(e)}
             )
 
+        # Windowsではロック中のファイルを置換できないため、置換前にロックを解放
+        if platform.system() == 'Windows' and lock_file is not None:
+            try:
+                lock_file.close()
+                lock_file = None
+                logger.debug("置換前にファイルロックを解放しました（Windows）")
+            except Exception as e:
+                logger.error(f"ファイルロック解放エラー（Windows）: {str(e)}")
+                raise MappingSaveError(
+                    f"ファイルロックの解放に失敗しました: {str(e)}",
+                    details={'path': str(file_path), 'error': str(e), 'os': 'Windows'}
+                )
+
         # アトミックな置き換え
         try:
             os.replace(temp_path, file_path)
