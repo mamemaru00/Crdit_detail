@@ -23,6 +23,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 import json
+import uuid
 
 # プロジェクトモジュールのインポート
 from modules import csv_processor
@@ -84,6 +85,26 @@ DEFAULT_CATEGORY = '支払額'
 DEFAULT_COLUMN = 'B'
 
 # ==================== ヘルパー関数 ====================
+
+def get_server_session_id() -> str:
+    """
+    サーバーサイドセッションIDを取得または生成する
+
+    Flask標準のsecure cookie sessionにserver_session_idを保存し、
+    SessionStoreで大容量データを管理するためのキーとして使用する。
+
+    Returns:
+        str: 32文字のhex形式のセッションID
+
+    Example:
+        >>> session_id = get_server_session_id()
+        >>> len(session_id)
+        32
+    """
+    if 'server_session_id' not in session:
+        session['server_session_id'] = uuid.uuid4().hex
+        logger.debug(f"新しいserver_session_id生成: {session['server_session_id']}")
+    return session['server_session_id']
 
 def allowed_file(filename: str) -> bool:
     """
@@ -150,8 +171,6 @@ def handle_error(e: Exception, user_message: str = "処理に失敗しました"
     Example:
         >>> return handle_error(e, "セッションの保存に失敗しました")
     """
-    import uuid
-
     # エラーIDを生成（ログとの紐付け用）
     error_id = str(uuid.uuid4())[:8]
 
@@ -204,6 +223,20 @@ def cleanup_old_files(directory: str, max_age_hours: int = 24) -> int:
         return deleted_count
 
 
+# ==================== リクエストフック ====================
+
+@app.before_request
+def ensure_server_session_id():
+    """
+    各リクエストの前にserver_session_idを確保
+
+    リクエストごとにserver_session_idが存在することを保証し、
+    存在しない場合は自動的に新しいIDを生成します。
+    これにより、SessionStoreでのデータ管理が可能になります。
+    """
+    get_server_session_id()
+
+
 # ==================== 基本ルート ====================
 
 @app.route('/')
@@ -244,7 +277,7 @@ def result():
     logger.info("処理結果画面を表示")
 
     # セッションストアから処理結果を取得
-    session_data = session_store.load(session.sid) or {}
+    session_data = session_store.load(get_server_session_id()) or {}
     result_data = session_data.get('process_result')
 
     if result_data is None:
@@ -322,10 +355,10 @@ def upload():
 
         # 7. セッションストアにファイルパスを保存
         try:
-            session_data = session_store.load(session.sid) or {}
+            session_data = session_store.load(get_server_session_id()) or {}
             session_data['uploaded_file_path'] = file_path
             session_data['uploaded_filename'] = filename
-            session_store.save(session.sid, session_data)
+            session_store.save(get_server_session_id(), session_data)
         except Exception as e:
             # アップロードされたファイルを削除
             if os.path.exists(file_path):
@@ -388,7 +421,7 @@ def preview():
 
     try:
         # 1. セッションストアからファイルパス取得
-        session_data = session_store.load(session.sid) or {}
+        session_data = session_store.load(get_server_session_id()) or {}
         file_path = session_data.get('uploaded_file_path')
 
         if not file_path:
@@ -421,7 +454,7 @@ def preview():
         # 4. セッションストアに全データを保存（後続のprocess処理用）
         try:
             session_data['csv_data'] = result['details']
-            session_store.save(session.sid, session_data)
+            session_store.save(get_server_session_id(), session_data)
         except Exception as e:
             return handle_error(e, "セッションの保存に失敗しました。再度お試しください")
 
@@ -512,7 +545,7 @@ def process():
             )), 400
 
         # 3. セッションストアからCSVデータ取得
-        session_data = session_store.load(session.sid) or {}
+        session_data = session_store.load(get_server_session_id()) or {}
         csv_data = session_data.get('csv_data')
 
         if not csv_data:
@@ -618,7 +651,7 @@ def process():
         # 11. セッションストアに処理結果を保存
         try:
             session_data['process_result'] = result_data
-            session_store.save(session.sid, session_data)
+            session_store.save(get_server_session_id(), session_data)
         except Exception as e:
             return handle_error(e, "処理結果の保存に失敗しました。再度お試しください")
 
@@ -1005,7 +1038,7 @@ def clear_session():
 
     try:
         # セッションストアからファイルパス取得
-        session_data = session_store.load(session.sid) or {}
+        session_data = session_store.load(get_server_session_id()) or {}
         file_path = session_data.get('uploaded_file_path')
 
         # アップロードファイルの削除
@@ -1014,7 +1047,7 @@ def clear_session():
             logger.info(f"アップロードファイルを削除: {file_path}")
 
         # セッションストアからデータ削除
-        session_store.delete(session.sid)
+        session_store.delete(get_server_session_id())
 
         # Cookieセッションもクリア
         session.clear()
