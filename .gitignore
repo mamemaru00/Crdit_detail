@@ -28,6 +28,8 @@ venv.bak/
 # CSVファイル（イオンカード明細データ）
 *.csv
 !tests/test_data/*.csv
+!tests/fixtures/csv/*.csv
+tests/fixtures/csv/large_file.csv
 uploads/
 data/*.csv
 
@@ -105,3 +107,16 @@ data/sessions/*.db-wal
 
 # テストデータ（実データは除外）
 tests/test_data/sample_real_*.csv
+
+# テスト用スクリプト（一時ファイル）
+encode_test_files.py
+run_csv_tests.bat
+
+# MCP & AI開発ツール
+.claude/settings.local.json
+.playwright-mcp/
+.serena/
+
+# Windows特殊ファイル・破損ファイル
+nul
+report?*
