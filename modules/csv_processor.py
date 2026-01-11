@@ -16,6 +16,7 @@
 import pandas as pd
 import chardet
 import re
+import os
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 
@@ -116,9 +117,13 @@ def validate_file_path(file_path: str, allowed_dir: str) -> bool:
     指定されたファイルパスが許可されたディレクトリ配下にあることを確認します。
     パスを正規化してシンボリックリンクを解決し、絶対パスで比較します。
 
+    セキュリティ上の理由により、allowed_dirは必須パラメータです。
+    allowed_dirを省略するとパストラバーサル保護が無効化されるため、
+    明示的な指定を強制します。
+
     Args:
         file_path (str): 検証対象のファイルパス
-        allowed_dir (str): 許可されたディレクトリパス
+        allowed_dir (str): 許可されたディレクトリパス（必須）
 
     Returns:
         bool: パスが有効な場合True
@@ -152,14 +157,68 @@ def validate_file_path(file_path: str, allowed_dir: str) -> bool:
         )
 
 
-def validate_file_size(file_path: str) -> bool:
+def _resolve_max_file_size(override: Optional[int] = None) -> int:
+    """
+    最大ファイルサイズを解決する（環境変数対応）
+
+    優先順位:
+    1. override引数（テスト用）
+    2. 環境変数CSV_MAX_FILE_SIZE
+    3. Flask current_app.config['MAX_CONTENT_LENGTH']
+    4. デフォルト値 MAX_FILE_SIZE (10MB)
+
+    Args:
+        override: テスト用の上限値（バイト）
+
+    Returns:
+        int: 最大ファイルサイズ（バイト）
+
+    Example:
+        >>> _resolve_max_file_size()
+        10485760  # 10MB
+        >>> _resolve_max_file_size(override=20 * 1024 * 1024)
+        20971520  # 20MB
+    """
+    # 1. override引数を優先
+    if override is not None:
+        return override
+
+    # 2. 環境変数をチェック
+    env_value = os.environ.get('CSV_MAX_FILE_SIZE')
+    if env_value:
+        try:
+            return int(env_value)
+        except ValueError:
+            pass  # 不正な値の場合はフォールバック
+
+    # 3. Flask設定を試行（Flask外では失敗する）
+    try:
+        from flask import current_app
+        flask_limit = current_app.config.get('MAX_CONTENT_LENGTH')
+        if flask_limit:
+            return flask_limit
+    except (ImportError, RuntimeError):
+        pass  # Flask未起動またはFlaskコンテキスト外
+
+    # 4. デフォルト値
+    return MAX_FILE_SIZE
+
+
+def validate_file_size(file_path: str, max_bytes: Optional[int] = None) -> bool:
     """ファイルサイズの妥当性を検証(DoS攻撃防止)
 
-    指定されたファイルのサイズが最大許容サイズ(10MB)を超えていないか確認します。
+    指定されたファイルのサイズが最大許容サイズを超えていないか確認します。
     大容量ファイルによるDoS攻撃を防止します。
+
+    上限値は以下の優先順位で決定されます:
+    1. max_bytes引数（テスト用）
+    2. 環境変数CSV_MAX_FILE_SIZE
+    3. Flask設定MAX_CONTENT_LENGTH
+    4. デフォルト10MB
 
     Args:
         file_path (str): 検証対象のファイルパス
+        max_bytes (int, optional): 最大ファイルサイズ（バイト）
 
     Returns:
         bool: ファイルサイズが許容範囲内の場合True
@@ -173,6 +232,8 @@ def validate_file_size(file_path: str) -> bool:
         True
         >>> validate_file_size('/tmp/uploads/huge.csv')
         InvalidFileFormatError: ファイルサイズが制限を超えています
+        >>> validate_file_size('/tmp/uploads/large.csv', max_bytes=20*1024*1024)
+        True  # 20MB上限で許可
     """
     path = Path(file_path)
 
@@ -183,16 +244,19 @@ def validate_file_size(file_path: str) -> bool:
     # ファイルサイズ取得
     file_size = path.stat().st_size
 
+    # 最大許容サイズを解決
+    limit = _resolve_max_file_size(override=max_bytes)
+
     # サイズ制限チェック
-    if file_size > MAX_FILE_SIZE:
+    if file_size > limit:
         file_size_mb = file_size / (1024 * 1024)
-        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
+        limit_mb = limit / (1024 * 1024)
         raise InvalidFileFormatError(
-            f"ファイルサイズが制限を超えています: {file_size_mb:.2f}MB (制限: {max_size_mb:.0f}MB)",
+            f"ファイルサイズが上限を超えています: {file_size_mb:.2f}MB (上限: {limit_mb:.0f}MB)",
             details={
                 "file_size_bytes": file_size,
                 "file_size_mb": file_size_mb,
-                "max_size_mb": max_size_mb
+                "limit_mb": limit_mb
             }
         )
 
@@ -775,7 +839,7 @@ def generate_preview(detail_data: List[Dict]) -> List[Dict]:
 
 # ==================== CSV統合処理関数 ====================
 
-def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
+def process_csv_file(file_path: str, allowed_dir: str) -> Dict:
     """CSV全体処理の統合関数(全フィールド対応)
 
     CSVファイルの読み込みから明細データ抽出、プレビュー生成、
@@ -796,9 +860,12 @@ def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
     7. generate_preview() - プレビュー生成
     8. サマリー情報の計算
 
+    セキュリティ上の理由により、allowed_dirは必須パラメータです。
+    パストラバーサル攻撃を防ぐため、信頼できるディレクトリを明示的に指定してください。
+
     Args:
         file_path (str): 処理対象のCSVファイルパス
-        allowed_dir (str): 許可されたディレクトリパス(デフォルト: '/tmp/uploads')
+        allowed_dir (str): 許可されたディレクトリパス（必須）
 
     Returns:
         Dict: 処理結果を含む辞書
@@ -824,7 +891,7 @@ def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
         CSVProcessingError: その他の予期しないエラー
 
     Example:
-        >>> result = process_csv_file('/tmp/uploads/aeon_card.csv')
+        >>> result = process_csv_file('/tmp/uploads/aeon_card.csv', '/tmp/uploads')
         >>> result['total_count']
         150
         >>> result['summary']['total_amount']

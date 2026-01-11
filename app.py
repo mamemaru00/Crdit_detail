@@ -753,7 +753,7 @@ def mapping_add():
 
     Request JSON:
         {
-            'store_name': str,      # 店舗名パターン
+            'pattern': str,         # 店舗名パターン
             'category': str,        # カテゴリ名
             'column': str,          # 列記号（A-Z）
             'match_type': str       # マッチタイプ（exact, prefix, partial）
@@ -786,7 +786,7 @@ def mapping_add():
             )), 400
 
         # 2. 必須フィールドの確認
-        required_fields = ['store_name', 'category', 'column', 'match_type']
+        required_fields = ['pattern', 'category', 'column', 'match_type']
         missing_fields = [f for f in required_fields if f not in request_data or not request_data[f]]
 
         if missing_fields:
@@ -802,7 +802,7 @@ def mapping_add():
         logger.info(
             f"マッピング追加成功: "
             f"ID={added_mapping['id']}, "
-            f"store_name={added_mapping['store_name']}, "
+            f"pattern={added_mapping['pattern']}, "
             f"category={added_mapping['category']}"
         )
 
@@ -840,7 +840,7 @@ def mapping_edit(mapping_id: int):
 
     Request JSON:
         {
-            'store_name': str (optional),
+            'pattern': str (optional),
             'category': str (optional),
             'column': str (optional),
             'match_type': str (optional)

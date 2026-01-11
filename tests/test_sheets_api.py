@@ -154,6 +154,27 @@ def sample_batch_updates():
     ]
 
 
+@pytest.fixture
+def mock_api_error_response():
+    """APIError用のモックHTTPレスポンス
+
+    gspread.exceptions.APIErrorはHTTPレスポンスオブジェクトを期待するため、
+    json()とtextメソッドを持つモックを提供
+
+    Returns:
+        MagicMock: モックHTTPレスポンスオブジェクト
+    """
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "error": {
+            "message": "API Error",
+            "code": 500
+        }
+    }
+    mock_response.text = "API Error"
+    return mock_response
+
+
 # ==================== 1. 認証テスト（5ケース） ====================
 
 @patch('modules.sheets_api.gspread.authorize')
@@ -280,13 +301,13 @@ def test_open_spreadsheet_not_found(mock_client):
     assert exc_info.value.details['spreadsheet_id'] == "invalid-id"
 
 
-def test_open_spreadsheet_api_error(mock_client):
+def test_open_spreadsheet_api_error(mock_client, mock_api_error_response):
     """APIエラー
 
     APIエラー発生時にSpreadsheetNotFoundErrorが発生することを確認
     """
     import gspread
-    mock_client.open_by_key.side_effect = gspread.exceptions.APIError("API Error")
+    mock_client.open_by_key.side_effect = gspread.exceptions.APIError(mock_api_error_response)
 
     with pytest.raises(SpreadsheetNotFoundError) as exc_info:
         open_spreadsheet(mock_client, "error-id")
@@ -440,16 +461,21 @@ def test_get_column_index_valid_columns(column_letter, expected_index):
     assert get_column_index(column_letter) == expected_index
 
 
-@pytest.mark.parametrize("invalid_column", ["A", "W", "Z", "AA"])
-def test_get_column_index_invalid_range(invalid_column):
-    """範囲外の列名エラー（A, W, Z）
+@pytest.mark.parametrize("invalid_column,expected_message", [
+    ("A", "列名が範囲外です"),  # A列は範囲外（B～V）
+    ("W", "列名が範囲外です"),  # W列は範囲外（B～V）
+    ("Z", "列名が範囲外です"),  # Z列は範囲外（B～V）
+    ("AA", "列名は1文字である必要があります")  # 2文字なので1文字チェックで弾かれる
+])
+def test_get_column_index_invalid_range(invalid_column, expected_message):
+    """範囲外の列名エラー（A, W, Z, AA）
 
     列名が範囲外の場合にValueErrorが発生することを確認
     """
     with pytest.raises(ValueError) as exc_info:
         get_column_index(invalid_column)
 
-    assert "列名が範囲外です" in str(exc_info.value)
+    assert expected_message in str(exc_info.value)
 
 
 @pytest.mark.parametrize("invalid_type", [2, None, [], {}])
@@ -529,13 +555,13 @@ def test_get_cell_value_numeric_conversion(mock_worksheet, cell_value, expected_
     assert result == expected_float
 
 
-def test_get_cell_value_api_error(mock_worksheet):
+def test_get_cell_value_api_error(mock_worksheet, mock_api_error_response):
     """APIエラー
 
     API呼び出しエラー時にCellUpdateErrorが発生することを確認
     """
     import gspread
-    mock_worksheet.cell.side_effect = gspread.exceptions.APIError("API Error")
+    mock_worksheet.cell.side_effect = gspread.exceptions.APIError(mock_api_error_response)
 
     with pytest.raises(CellUpdateError) as exc_info:
         get_cell_value(mock_worksheet, 11, 2)
@@ -634,7 +660,7 @@ def test_update_cell_value_result_format(mock_worksheet):
     assert result['added_amount'] == 2000.0
 
 
-def test_update_cell_value_api_error(mock_worksheet):
+def test_update_cell_value_api_error(mock_worksheet, mock_api_error_response):
     """APIエラー
 
     更新時のAPIエラーでCellUpdateErrorが発生することを確認
@@ -645,7 +671,7 @@ def test_update_cell_value_api_error(mock_worksheet):
     mock_cell = MagicMock()
     mock_cell.value = "1000"
     mock_worksheet.cell.return_value = mock_cell
-    mock_worksheet.update_cell.side_effect = gspread.exceptions.APIError("Update failed")
+    mock_worksheet.update_cell.side_effect = gspread.exceptions.APIError(mock_api_error_response)
 
     with pytest.raises(CellUpdateError) as exc_info:
         update_cell_value(mock_worksheet, 11, 2, 5780.0)
@@ -655,15 +681,17 @@ def test_update_cell_value_api_error(mock_worksheet):
 
 # ==================== 8. バッチ更新テスト（5ケース） ====================
 
-def test_batch_update_cells_success(mock_worksheet, sample_batch_updates):
+@patch('modules.sheets_api.time.sleep')
+def test_batch_update_cells_success(mock_sleep, mock_worksheet, sample_batch_updates):
     """バッチ更新成功（複数セル）
 
     複数セルが正常に更新されることを確認
+    現在の実装はworksheet.update_cells()を使う一括更新モード
     """
-    # セル値取得のモック
-    mock_cell = MagicMock()
-    mock_cell.value = "1000"
-    mock_worksheet.cell.return_value = mock_cell
+    # batch_get()のモック（既存値取得用）
+    mock_worksheet.batch_get.return_value = [
+        [["1000"], ["2000"], ["3000"]]  # 3セル分の既存値
+    ]
 
     result = batch_update_cells(mock_worksheet, sample_batch_updates)
 
@@ -673,9 +701,16 @@ def test_batch_update_cells_success(mock_worksheet, sample_batch_updates):
     assert result['failed_updates'] == 0
     assert len(result['update_details']) == 3
     assert len(result['errors']) == 0
+    assert result['updated_cells'] == 3
 
-    # 各更新が実行されたことを確認
-    assert mock_worksheet.update_cell.call_count == 3
+    # update_cells()が1回だけ呼ばれることを確認（一括更新）
+    mock_worksheet.update_cells.assert_called_once()
+
+    # update_cell()は呼ばれない（個別更新ではない）
+    mock_worksheet.update_cell.assert_not_called()
+
+    # レート制限が1回だけ適用される
+    assert mock_sleep.call_count == 1
 
 
 def test_batch_update_cells_empty_list(mock_worksheet):
@@ -790,21 +825,24 @@ def test_apply_rate_limit(mock_sleep):
 def test_batch_update_calls_rate_limit(mock_sleep, mock_worksheet):
     """バッチ更新がレート制限を呼ぶ
 
-    各セル更新後にレート制限が適用されることを確認
+    一括更新後にレート制限が適用されることを確認
+    現在の実装では一括更新のため、sleep()は1回のみ呼ばれる
     """
     updates = [
         {'month': 8, 'column_letter': 'C', 'amount': 5780.0, 'add_mode': True},
         {'month': 9, 'column_letter': 'C', 'amount': 3200.0, 'add_mode': True},
     ]
 
-    mock_cell = MagicMock()
-    mock_cell.value = "1000"
-    mock_worksheet.cell.return_value = mock_cell
+    # batch_get()のモック
+    mock_worksheet.batch_get.return_value = [
+        [["1000"], ["2000"]]  # 2セル分の既存値
+    ]
 
     batch_update_cells(mock_worksheet, updates)
 
-    # 各更新後にsleep()が呼ばれる
-    assert mock_sleep.call_count == 2
+    # 一括更新後にsleep()が1回だけ呼ばれる
+    assert mock_sleep.call_count == 1
+    mock_sleep.assert_called_with(RATE_LIMIT_WAIT)
 
 
 @patch('modules.sheets_api.time.sleep')
@@ -1080,7 +1118,7 @@ def test_get_column_index_multi_char(mock_worksheet):
 
 
 @patch('modules.sheets_api.time.sleep')
-def test_retry_decorator(mock_sleep):
+def test_retry_decorator(mock_sleep, mock_api_error_response):
     """リトライデコレータの動作確認
 
     _retry_on_api_errorデコレータが正しく動作することを確認
@@ -1089,7 +1127,7 @@ def test_retry_decorator(mock_sleep):
 
     @_retry_on_api_error(max_retries=3)
     def failing_function():
-        raise gspread.exceptions.APIError("Temporary error")
+        raise gspread.exceptions.APIError(mock_api_error_response)
 
     # 3回リトライ後に例外が発生することを確認
     with pytest.raises(gspread.exceptions.APIError):

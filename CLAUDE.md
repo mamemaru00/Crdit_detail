@@ -124,6 +124,20 @@ docker-compose down
 ### Application Access
 ブラウザで `http://localhost:5000` にアクセス
 
+### Environment Variables
+```bash
+# CSVファイルサイズ上限設定（オプション）
+# Windows
+set CSV_MAX_FILE_SIZE=20971520  # 20MB
+
+# Mac/Linux
+export CSV_MAX_FILE_SIZE=20971520  # 20MB
+
+# デフォルト: 10MB (10485760 bytes)
+# テスト用: 20MB (20971520 bytes)
+# 本番推奨: 10MB（セキュリティ重視）
+```
+
 ### Python Development (venv)
 ```bash
 # 仮想環境作成
@@ -170,11 +184,15 @@ python app.py
    - 新規マッピング登録機能
 
 6. **セッション管理**
+   - 独自server_session_id実装（Flask標準session使用）
    - SQLiteベースのサーバーサイドセッションストア
    - Cookie 4KB制限の解消（大容量CSVデータ対応）
+     - Cookieには32バイトのUUID4のみ保存
+     - 大容量データはSessionStoreに保存
    - セッションデータのセキュア管理
    - 自動有効期限管理（TTL: 30分、カスタマイズ可能）
    - WALモード対応（同時実行性向上）
+   - Flask-Session不要（TypeErrorリスク回避）
 
 ## API Endpoints
 
@@ -229,7 +247,7 @@ GET  /download/log  # 処理ログダウンロード
 
 ### Performance Targets
 - 1000件データ処理時間: 30秒以内
-- 大容量ファイル対応: 10MB以上
+- 大容量ファイル対応: 10MB級（環境変数で上限調整可能）
 
 ## Security Considerations
 
@@ -247,6 +265,16 @@ GET  /download/log  # 処理ログダウンロード
 - CSVファイルは処理後自動削除
 - 機密情報（credentials.json等）は Git 管理対象外
 - サービスアカウント認証（OAuth不要）
+
+### File Size Limits
+- **デフォルト上限**: 10MB（DoS攻撃防止）
+- **環境変数**: `CSV_MAX_FILE_SIZE`（バイト単位）でカスタマイズ可能
+- **優先順位**:
+  1. 環境変数`CSV_MAX_FILE_SIZE`
+  2. Flask設定`MAX_CONTENT_LENGTH`（50MB）
+  3. デフォルト10MB
+- **テスト環境**: 20MBに設定可能（性能検証用）
+- **本番環境**: 10MB推奨（セキュリティ重視）
 
 ## Key Conventions
 
@@ -377,6 +405,12 @@ web_search = true
 - `07_frontend/`: フロントエンド概要
 - `08_library/`: ライブラリ仕様
 - `09_test/`: テスト仕様
+
+### Phase 4 Implementation Reports
+- `PHASE4_FIX_VERIFICATION_REPORT.md`: Phase 4問題修正検証レポート
+- `FIELD_NAME_FIX_SUMMARY.md`: フィールド名統一修正サマリー
+- `SESSION_SID_FIX_IMPLEMENTATION.md`: session.sid修正実装レポート
+- `report/PHASE4_STEP4_2_CATEGORY_LOGIC_TEST_REPORT.md`: カテゴリロジックテスト検証レポート
 
 ### Contact & Support
 - プロジェクト管理: GitHub Issues
