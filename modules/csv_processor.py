@@ -111,16 +111,19 @@ class PathValidationError(CSVProcessingError):
 
 # ==================== セキュリティ関数 ====================
 
-def validate_file_path(file_path: str, allowed_dir: str = None) -> bool:
+def validate_file_path(file_path: str, allowed_dir: str) -> bool:
     """ファイルパスの妥当性を検証(パストラバーサル攻撃防止)
 
     指定されたファイルパスが許可されたディレクトリ配下にあることを確認します。
     パスを正規化してシンボリックリンクを解決し、絶対パスで比較します。
 
+    セキュリティ上の理由により、allowed_dirは必須パラメータです。
+    allowed_dirを省略するとパストラバーサル保護が無効化されるため、
+    明示的な指定を強制します。
+
     Args:
         file_path (str): 検証対象のファイルパス
-        allowed_dir (str, optional): 許可されたディレクトリパス
-                                     Noneの場合、file_pathの親ディレクトリを使用
+        allowed_dir (str): 許可されたディレクトリパス（必須）
 
     Returns:
         bool: パスが有効な場合True
@@ -136,11 +139,6 @@ def validate_file_path(file_path: str, allowed_dir: str = None) -> bool:
     """
     # パスを正規化して絶対パスに変換(シンボリックリンク解決)
     normalized_file_path = Path(file_path).resolve()
-
-    # allowed_dirが指定されていない場合、file_pathの親ディレクトリを使用
-    if allowed_dir is None:
-        allowed_dir = str(normalized_file_path.parent)
-
     normalized_allowed_dir = Path(allowed_dir).resolve()
 
     # 許可されたディレクトリ配下にあるか確認
@@ -841,7 +839,7 @@ def generate_preview(detail_data: List[Dict]) -> List[Dict]:
 
 # ==================== CSV統合処理関数 ====================
 
-def process_csv_file(file_path: str, allowed_dir: str = None) -> Dict:
+def process_csv_file(file_path: str, allowed_dir: str) -> Dict:
     """CSV全体処理の統合関数(全フィールド対応)
 
     CSVファイルの読み込みから明細データ抽出、プレビュー生成、
@@ -862,10 +860,12 @@ def process_csv_file(file_path: str, allowed_dir: str = None) -> Dict:
     7. generate_preview() - プレビュー生成
     8. サマリー情報の計算
 
+    セキュリティ上の理由により、allowed_dirは必須パラメータです。
+    パストラバーサル攻撃を防ぐため、信頼できるディレクトリを明示的に指定してください。
+
     Args:
         file_path (str): 処理対象のCSVファイルパス
-        allowed_dir (str, optional): 許可されたディレクトリパス
-                                     Noneの場合、file_pathの親ディレクトリを使用
+        allowed_dir (str): 許可されたディレクトリパス（必須）
 
     Returns:
         Dict: 処理結果を含む辞書
@@ -891,7 +891,7 @@ def process_csv_file(file_path: str, allowed_dir: str = None) -> Dict:
         CSVProcessingError: その他の予期しないエラー
 
     Example:
-        >>> result = process_csv_file('/tmp/uploads/aeon_card.csv')
+        >>> result = process_csv_file('/tmp/uploads/aeon_card.csv', '/tmp/uploads')
         >>> result['total_count']
         150
         >>> result['summary']['total_amount']

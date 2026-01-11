@@ -130,7 +130,9 @@ def test_1000_records_csv_processing():
         start_time = time.time()
 
         # CSV解析実行
-        result = csv_processor.process_csv_file(temp_file_path)
+        # allowed_dir必須（パストラバーサル対策）
+        temp_dir = os.path.dirname(temp_file_path)
+        result = csv_processor.process_csv_file(temp_file_path, temp_dir)
 
         # 処理時間計測
         elapsed_time = time.time() - start_time
@@ -172,7 +174,9 @@ def test_1000_records_end_to_end():
         start_time = time.time()
 
         # Step 1: CSV解析
-        csv_result = csv_processor.process_csv_file(temp_file_path)
+        # allowed_dir必須（パストラバーサル対策）
+        temp_dir = os.path.dirname(temp_file_path)
+        csv_result = csv_processor.process_csv_file(temp_file_path, temp_dir)
         records = csv_result['details']
 
         # Step 2: カテゴリ判定
@@ -279,7 +283,9 @@ def test_10mb_csv_file(monkeypatch):
         start_time = time.time()
 
         # CSV解析実行
-        result = csv_processor.process_csv_file(temp_file_path)
+        # allowed_dir必須（パストラバーサル対策）
+        temp_dir = os.path.dirname(temp_file_path)
+        result = csv_processor.process_csv_file(temp_file_path, temp_dir)
 
         # 処理時間計測
         elapsed_time = time.time() - start_time
