@@ -951,7 +951,7 @@ def test_process_1000_records_performance(temp_upload_dir):
 - **評価**: Full Pass（完全合格）
 
 ### Step 4.4: Flaskエンドポイント統合テスト
-**実装日時**: 2026-01-10
+**実装日時**: -
 **検証結果**: ❌ Not Implemented（未実装）
 
 #### 実装状況
@@ -959,6 +959,10 @@ def test_process_1000_records_performance(temp_upload_dir):
 - **実装済み**: 0ケース (0%)
 - **未実装**: 50+ケース (100%)
 - **影響範囲**: エンドポイント全体のリグレッション検知ができない状態
+
+#### 既存の関連テスト
+- `tests/test_app_session_integration.py`: セッション機能テスト（5ケース、100%合格）
+  - **注**: これはセッション機能の統合テストであり、Flaskエンドポイント全体のテストではない
 
 #### 推奨テストファイル構成
 ```
@@ -973,6 +977,11 @@ tests/integration/
 #### 推定工数
 - **合計工数**: 12-16時間
 - **段階的リリース可能**: 各Phaseごとに実装→テスト→マージ
+
+#### 優先度
+- **🟡 中（品質向上）**: バックエンドロジックは完全にテスト済み
+- **リスク**: エンドポイントレベルのリグレッションは検知できない
+- **推奨**: Phase 5（Docker化）後に実装
 
 ### Step 4.5: Playwrightフロントエンドテスト
 **実装日時**: 2026-01-10
@@ -1103,13 +1112,13 @@ tests/integration/
 | **Step 4.1**: CSV Processor | 38ケース | 38ケース | 100% | ✅ Full Pass |
 | **Step 4.2**: Category Logic | 98ケース | 98ケース | 100% | ✅ Full Pass |
 | **Step 4.3**: Sheets API | 80ケース | 80ケース | 100% | ✅ Full Pass |
-| **Step 4.4**: Flask Endpoints | 5ケース（統合テスト） | 5ケース | 100% | ✅ Full Pass |
+| **Step 4.4**: Flask Endpoints | 0ケース（未実装） | 0ケース | N/A | ❌ Not Implemented |
 | **Step 4.5**: Playwright Frontend | 12ケース | 12ケース | 100% | ✅ Full Pass |
 | **Step 4.6**: Performance | 13ケース | 13ケース | 100% | ✅ Full Pass |
-| **合計** | **246ケース** | **246ケース** | **100%** | **✅ Full Pass** |
+| **実装済み合計** | **241ケース** | **241ケース** | **100%** | **✅ Full Pass** |
 
 #### 総合判定
-**🟢 Full Pass（完全合格）**
+**🟡 Conditional Pass（条件付き合格）**
 
 **達成事項**:
 - ✅ バックエンドロジック（CSV処理、カテゴリ判定、Sheets API）: 100%合格
@@ -1117,6 +1126,13 @@ tests/integration/
 - ✅ セッション管理: 独自server_session_id実装で完全解決
 - ✅ フロントエンド統合: フィールド名統一により正常動作
 - ✅ パフォーマンステスト: 環境問題修正により全合格
+- ✅ Playwrightブラウザテスト: 全機能正常動作確認
+
+**未完了項目**:
+- ❌ Flask Endpoints統合テスト（50+ケース未実装）
+  - **影響**: エンドポイントレベルのリグレッション検知不可
+  - **リスク**: 中程度（バックエンドロジックは完全テスト済み）
+  - **推奨対応**: Phase 5（Docker化）完了後に実装
 
 #### 修正完了項目（2026-01-11）
 
