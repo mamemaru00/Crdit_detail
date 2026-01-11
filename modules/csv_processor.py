@@ -110,7 +110,7 @@ class PathValidationError(CSVProcessingError):
 
 # ==================== セキュリティ関数 ====================
 
-def validate_file_path(file_path: str, allowed_dir: str) -> bool:
+def validate_file_path(file_path: str, allowed_dir: str = None) -> bool:
     """ファイルパスの妥当性を検証(パストラバーサル攻撃防止)
 
     指定されたファイルパスが許可されたディレクトリ配下にあることを確認します。
@@ -118,7 +118,8 @@ def validate_file_path(file_path: str, allowed_dir: str) -> bool:
 
     Args:
         file_path (str): 検証対象のファイルパス
-        allowed_dir (str): 許可されたディレクトリパス
+        allowed_dir (str, optional): 許可されたディレクトリパス
+                                     Noneの場合、file_pathの親ディレクトリを使用
 
     Returns:
         bool: パスが有効な場合True
@@ -134,6 +135,11 @@ def validate_file_path(file_path: str, allowed_dir: str) -> bool:
     """
     # パスを正規化して絶対パスに変換(シンボリックリンク解決)
     normalized_file_path = Path(file_path).resolve()
+
+    # allowed_dirが指定されていない場合、file_pathの親ディレクトリを使用
+    if allowed_dir is None:
+        allowed_dir = str(normalized_file_path.parent)
+
     normalized_allowed_dir = Path(allowed_dir).resolve()
 
     # 許可されたディレクトリ配下にあるか確認
@@ -775,7 +781,7 @@ def generate_preview(detail_data: List[Dict]) -> List[Dict]:
 
 # ==================== CSV統合処理関数 ====================
 
-def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
+def process_csv_file(file_path: str, allowed_dir: str = None) -> Dict:
     """CSV全体処理の統合関数(全フィールド対応)
 
     CSVファイルの読み込みから明細データ抽出、プレビュー生成、
@@ -798,7 +804,8 @@ def process_csv_file(file_path: str, allowed_dir: str = '/tmp/uploads') -> Dict:
 
     Args:
         file_path (str): 処理対象のCSVファイルパス
-        allowed_dir (str): 許可されたディレクトリパス(デフォルト: '/tmp/uploads')
+        allowed_dir (str, optional): 許可されたディレクトリパス
+                                     Noneの場合、file_pathの親ディレクトリを使用
 
     Returns:
         Dict: 処理結果を含む辞書

@@ -115,7 +115,7 @@ def test_1000_records_csv_processing():
         assert result['total_count'] == 1000, f"レコード数が不正: {result['total_count']}（期待値: 1000）"
         assert elapsed_time < 30, f"CSV処理時間{elapsed_time:.2f}秒が30秒を超過"
 
-        print(f"\n✓ 1000件CSV処理成功: {elapsed_time:.2f}秒")
+        print(f"\n[OK] 1000件CSV処理成功: {elapsed_time:.2f}秒")
 
     finally:
         # 一時ファイル削除
@@ -203,7 +203,7 @@ def test_1000_records_end_to_end():
         assert batch_result['successful_updates'] == 1000, "Sheets更新が不完全です"
         assert elapsed_time < 30, f"エンドツーエンド処理時間{elapsed_time:.2f}秒が30秒を超過"
 
-        print(f"\n✓ 1000件エンドツーエンド処理成功: {elapsed_time:.2f}秒")
+        print(f"\n[OK] 1000件エンドツーエンド処理成功: {elapsed_time:.2f}秒")
 
     finally:
         # 一時ファイル削除
@@ -229,7 +229,7 @@ def test_10mb_csv_file():
     file_size_mb = len(csv_data) / (1024 * 1024)
     assert file_size_mb > 10, f"テストデータが10MBに満たない: {file_size_mb:.2f}MB"
 
-    print(f"\n✓ テストデータサイズ: {file_size_mb:.2f}MB ({record_count}件)")
+    print(f"\n[OK] テストデータサイズ: {file_size_mb:.2f}MB ({record_count}件)")
 
     # 一時ファイルに保存
     with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as temp_file:
@@ -250,7 +250,7 @@ def test_10mb_csv_file():
         assert result is not None, "10MB超CSVの解析が失敗しました"
         assert result['total_count'] == record_count, f"レコード数が不正: {result['total_count']}（期待値: {record_count}）"
 
-        print(f"✓ 10MB超CSV処理成功: {elapsed_time:.2f}秒")
+        print(f"[OK] 10MB超CSV処理成功: {elapsed_time:.2f}秒")
 
     finally:
         # 一時ファイル削除
@@ -305,7 +305,7 @@ def test_batch_update_performance():
     assert result['successful_updates'] == 100, f"成功件数が不正: {result['successful_updates']}"
     assert elapsed_time < 1.0, f"バッチ更新時間{elapsed_time:.2f}秒が1秒を超過"
 
-    print(f"\n✓ 100件バッチ更新成功: {elapsed_time:.3f}秒")
+    print(f"\n[OK] 100件バッチ更新成功: {elapsed_time:.3f}秒")
 
 
 # ==================== パフォーマンス統計出力 ====================
@@ -337,7 +337,7 @@ def test_batch_get_performance():
     assert len(result[0][0]) == 10  # 10列
     assert elapsed_time < 5.0, f"batch_get()処理時間{elapsed_time:.2f}秒が5秒を超過"
 
-    print(f"\n✓ 1000セルbatch_get()成功: {elapsed_time:.3f}秒")
+    print(f"\n[OK] 1000セルbatch_get()成功: {elapsed_time:.3f}秒")
 
 
 @pytest.mark.performance
@@ -392,7 +392,7 @@ def test_batch_update_with_batch_get_integration():
     # 処理時間が10秒以内（API呼び出し2回 + 計算処理）
     assert elapsed_time < 10.0, f"統合処理時間{elapsed_time:.2f}秒が10秒を超過"
 
-    print(f"\n✓ 1000件統合処理成功: {elapsed_time:.3f}秒")
+    print(f"\n[OK] 1000件統合処理成功: {elapsed_time:.3f}秒")
 
 
 @pytest.mark.performance
@@ -405,10 +405,10 @@ def test_performance_summary(capsys):
     print("\n" + "=" * 60)
     print("性能テスト結果サマリー")
     print("=" * 60)
-    print("✓ すべての性能テストが完了しました")
-    print("✓ 1000件データ処理: 30秒以内")
-    print("✓ 10MB以上ファイル処理: 正常完了")
-    print("✓ エンドツーエンド処理: 30秒以内")
-    print("✓ batch_get()性能: 5秒以内")
-    print("✓ 統合処理性能: 10秒以内")
+    print("[OK] すべての性能テストが完了しました")
+    print("[OK] 1000件データ処理: 30秒以内")
+    print("[OK] 10MB以上ファイル処理: 正常完了")
+    print("[OK] エンドツーエンド処理: 30秒以内")
+    print("[OK] batch_get()性能: 5秒以内")
+    print("[OK] 統合処理性能: 10秒以内")
     print("=" * 60)
