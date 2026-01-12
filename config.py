@@ -9,7 +9,7 @@ class Config:
 
     # ファイルアップロード設定
     UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB（10MB以上要件充足）
+    MAX_CONTENT_LENGTH = int(os.environ.get('CSV_MAX_FILE_SIZE', str(50 * 1024 * 1024)))  # デフォルト50MB
     ALLOWED_EXTENSIONS = {'csv'}
 
     # Google Sheets API 設定
