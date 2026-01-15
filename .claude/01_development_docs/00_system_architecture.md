@@ -5,25 +5,33 @@
 ```
 [ユーザーPC]
     ↓ (ブラウザアクセス http://localhost:5000)
-[Dockerコンテナ]
-  - Webアプリケーション（Flask）
-    ├ フロントエンド（Jinja2テンプレート）
-    └ バックエンド（Flaskルート）
-        ├ CSV解析エンジン
-        ├ カテゴリ判定エンジン
-        ├ マッピング管理
-        └ スプレッドシート連携
-            ↓ (サービスアカウント認証)
-    [Google Sheets API]
-        ↓
-    [Googleスプレッドシート]
-      ├ 2025年シート
-      ├ 2024年シート
-      └ ...
-    
+[Dockerコンテナ群]
+  ├ Nginxリバースプロキシ（ポート80→5000）
+  │   ├ gzip圧縮（JSON/CSS/JS）
+  │   ├ NaN→null変換フィルター（JSON応答）
+  │   ├ セキュリティヘッダー（X-Content-Type-Options, X-Frame-Options, X-XSS-Protection）
+  │   └ ファイルサイズ制限（10MB、DoS保護）
+  │       ↓ (プロキシ http://web:5000)
+  └ Webアプリケーション（Flask）
+      ├ フロントエンド（Jinja2テンプレート + Bootstrap 5.3）
+      └ バックエンド（Flaskルート）
+          ├ CSV解析エンジン（pandas、chardet）
+          ├ カテゴリ判定エンジン（パターンマッチング）
+          ├ マッピング管理（JSON CRUD）
+          ├ セッションストア（SQLite、WALモード）
+          └ スプレッドシート連携（gspread）
+              ↓ (サービスアカウント認証)
+      [Google Sheets API]
+          ↓
+      [Googleスプレッドシート]
+        ├ 2025年シート
+        ├ 2024年シート
+        └ ...
+
 [設定ファイル/DB]
-  - マッピングテーブル（JSON）
-  - サービスアカウント認証情報（JSON）
+  - マッピングテーブル（data/mapping.json）
+  - サービスアカウント認証情報（config/service_account.json）
+  - セッションDB（data/sessions/sessions.db）
 ```
 
 ## システム構成の特徴
@@ -34,9 +42,10 @@
 - ポート5000でローカルアクセス
 
 ### アプリケーション層
-- Flask 3.1.2（Webフレームワーク）
-- Jinja2（テンプレートエンジン）
-- Gunicorn（本番用WSGIサーバー）
+- **Nginx**: リバースプロキシ、gzip圧縮、NaN変換、セキュリティヘッダー
+- **Flask 3.1.2**: Webフレームワーク
+- **Jinja2**: テンプレートエンジン
+- **Gunicorn**: 本番用WSGIサーバー
 
 ### データ層
 - JSONファイル（マッピングテーブル）

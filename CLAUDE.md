@@ -16,21 +16,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 [ユーザーPC]
     ↓ (ブラウザアクセス http://localhost:5000)
-[Dockerコンテナ]
-  - Webアプリケーション（Flask）
-    ├ フロントエンド（Jinja2テンプレート + Bootstrap 5.3）
-    └ バックエンド（Flaskルート）
-        ├ CSV解析エンジン
-        ├ カテゴリ判定エンジン
-        ├ マッピング管理
-        └ スプレッドシート連携
-            ↓ (サービスアカウント認証)
-    [Google Sheets API]
-        ↓
-    [Googleスプレッドシート]
-      ├ 2025年シート
-      ├ 2024年シート
-      └ ...
+[Dockerコンテナ群]
+  ├ Nginxリバースプロキシ（ポート80→5000）
+  │   ├ gzip圧縮（JSON/CSS/JS）
+  │   ├ NaN→null変換フィルター（JSON応答）
+  │   ├ セキュリティヘッダー（X-Content-Type-Options等）
+  │   └ ファイルサイズ制限（10MB、DoS保護）
+  │       ↓ (プロキシ http://web:5000)
+  └ Webアプリケーション（Flask）
+      ├ フロントエンド（Jinja2テンプレート + Bootstrap 5.3）
+      └ バックエンド（Flaskルート）
+          ├ CSV解析エンジン
+          ├ カテゴリ判定エンジン
+          ├ マッピング管理
+          └ スプレッドシート連携
+              ↓ (サービスアカウント認証)
+      [Google Sheets API]
+          ↓
+      [Googleスプレッドシート]
+        ├ 2025年シート
+        ├ 2024年シート
+        └ ...
 ```
 
 ### Directory Structure

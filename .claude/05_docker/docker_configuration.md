@@ -14,22 +14,33 @@
 
 ## コンテナ構成
 
-### アプリケーションコンテナ
+### マルチコンテナ構成（Docker Compose）
 ```
-[Dockerコンテナ]
-├── Python 3.14.0
-├── Flask 3.1.2（Webアプリケーション）
-├── Gunicorn 23.0以上（WSGIサーバー）
-└── 必要ライブラリ
-    ├── pandas（CSV解析）
-    ├── gspread（Google Sheets API）
-    ├── chardet（文字コード検出）
-    └── その他
+[Dockerコンテナ群]
+├── nginxコンテナ（nginx:alpine）
+│   ├── ポート80（ホスト）→ 80（コンテナ）
+│   ├── gzip圧縮（JSON/CSS/JS）
+│   ├── NaN→null変換フィルター（JSON応答）
+│   ├── セキュリティヘッダー付与
+│   │   ├ X-Content-Type-Options: nosniff
+│   │   ├ X-Frame-Options: SAMEORIGIN
+│   │   └ X-XSS-Protection: 1; mode=block
+│   └── ファイルサイズ制限（10MB、DoS保護）
+│       ↓ (内部プロキシ http://web:5000)
+└── webコンテナ（Python 3.14.0）
+    ├── Flask 3.1.2（Webアプリケーション）
+    ├── Gunicorn 23.0以上（WSGIサーバー）
+    └── 必要ライブラリ
+        ├── pandas（CSV解析）
+        ├── gspread（Google Sheets API）
+        ├── chardet（文字コード検出）
+        └── その他
 ```
 
 ### ポート設定
-- ホスト: `localhost:5000`
-- コンテナ内: Flask開発サーバーまたはGunicorn
+- **ホスト側**: `localhost:5000` → nginxコンテナ:80
+- **コンテナ内**: nginx:80 → web:5000（Gunicorn/Flask）
+- **内部通信**: Dockerネットワーク経由（http://web:5000）
 
 ## ディレクトリマウント
 
@@ -71,6 +82,17 @@ docker-compose down
 ブラウザで `http://localhost:5000` にアクセス
 
 ## セキュリティ考慮事項
+
+### Nginx層でのセキュリティ対策
+- **ファイルサイズ制限**: 10MB（DoS攻撃防止）
+- **セキュリティヘッダー**:
+  - `X-Content-Type-Options: nosniff` - MIMEタイプスニッフィング防止
+  - `X-Frame-Options: SAMEORIGIN` - クリックジャッキング防止
+  - `X-XSS-Protection: 1; mode=block` - XSS攻撃防止
+- **JSON応答の正規化**: NaN値をnullに自動変換（クライアントエラー防止）
+
+### アプリケーション層のセキュリティ
 - ローカル環境での動作（外部公開なし）
 - 認証情報ファイルはコンテナ内で安全に管理
 - CSVファイルは処理後自動削除
+- サービスアカウント認証（OAuth不要）
