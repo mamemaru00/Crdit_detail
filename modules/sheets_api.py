@@ -266,28 +266,28 @@ def get_year_sheet(spreadsheet: Spreadsheet, year: int) -> Worksheet:
     Example:
         >>> sheet = get_year_sheet(spreadsheet, 2025)
     """
-    # シート名を生成
-    sheet_name = f"{year}年"
+    # シート名を生成（例: "2025"）
+    sheet_name = str(year)
 
     try:
         # シート取得
         worksheet = spreadsheet.worksheet(sheet_name)
-
         logger.info(f"[SHEET:GET] 年シート取得: {sheet_name}")
         return worksheet
 
-    except gspread.exceptions.WorksheetNotFound as e:
-        logger.error(f"[SHEET:ERROR] 年シートが見つかりません: {sheet_name}")
+    except gspread.exceptions.WorksheetNotFound:
+        available_sheets = [ws.title for ws in spreadsheet.worksheets()]
+        logger.error(
+            f"[SHEET:ERROR] 年シートが見つかりません: {sheet_name}, "
+            f"利用可能なシート: {available_sheets}"
+        )
         raise SheetNotFoundError(
             f"年シートが見つかりません: {sheet_name}",
-            details={'year': year, 'sheet_name': sheet_name, 'error': str(e)}
-        )
-
-    except Exception as e:
-        logger.error(f"[SHEET:ERROR] 年シート取得エラー: {str(e)}")
-        raise SheetNotFoundError(
-            f"年シートの取得に失敗しました: {str(e)}",
-            details={'year': year, 'sheet_name': sheet_name, 'error': str(e)}
+            details={
+                'year': year,
+                'sheet_name': sheet_name,
+                'available_sheets': available_sheets
+            }
         )
 
 
