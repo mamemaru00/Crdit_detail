@@ -85,16 +85,16 @@ def get_unregistered_stores(records: List[Dict]) -> List[str]:
 ```python
 def authenticate(credentials_path: str) -> gspread.Client:
     """サービスアカウントで認証"""
-    
+
 def open_spreadsheet(client: Client, sheet_id: str) -> Spreadsheet:
     """スプレッドシートを開く"""
-    
+
 def get_year_sheet(spreadsheet: Spreadsheet, year: int) -> Worksheet:
     """年シートを取得"""
-    
+
 def update_cell(sheet: Worksheet, row: int, col: str, value: float):
     """セル値を更新（加算）"""
-    
+
 def batch_update(sheet: Worksheet, updates: List[Dict]):
     """複数セルを一括更新"""
 ```
@@ -113,6 +113,186 @@ new_value = current_value + amount
 # 更新実行
 sheet.update_cell(row, column, new_value)
 ```
+
+---
+
+## 4. ChatGPT分類モジュール（gpt_classifier.py）【NEW】
+
+### 主要機能
+- 未登録店舗の自動カテゴリ分類
+- OpenAI GPT-5 API 連携
+- カテゴリマスタの動的送信
+- エラーハンドリング（API失敗時のフォールバック）
+- レート制限対応
+
+### 主要メソッド
+```python
+def classify_unregistered_stores(
+    unregistered_stores: List[Dict],
+    category_master: Dict[str, str]
+) -> List[Dict]:
+    """
+    未登録店舗をChatGPTで分類
+
+    Args:
+        unregistered_stores: 未登録店舗リスト
+            [{"store": "店舗名", "amount": 金額, "count": 出現回数}, ...]
+        category_master: カテゴリマスタ
+            {"C": "食材費", "D": "外食費", ...}
+
+    Returns:
+        分類結果リスト
+            [{"store": "店舗名", "category": "カテゴリ名", "column": "列"}, ...]
+    """
+
+def build_gpt_request(
+    stores: List[Dict],
+    categories: Dict[str, str]
+) -> Dict:
+    """
+    ChatGPT APIリクエストを構築
+
+    Args:
+        stores: 店舗リスト
+        categories: カテゴリマスタ
+
+    Returns:
+        GPT APIリクエストペイロード
+    """
+
+def parse_gpt_response(response: str) -> List[Dict]:
+    """
+    ChatGPT APIレスポンスをパース
+
+    Args:
+        response: GPT API レスポンス（JSON文字列）
+
+    Returns:
+        パース済み分類結果リスト
+
+    Raises:
+        ValueError: JSON解析失敗時
+    """
+
+def validate_classification_result(result: Dict) -> bool:
+    """
+    分類結果の妥当性を検証
+
+    Args:
+        result: 分類結果
+            {"store": "店舗名", "category": "カテゴリ名", "column": "列"}
+
+    Returns:
+        True: 妥当、False: 不正
+    """
+
+def apply_default_category(store: str) -> Dict:
+    """
+    デフォルトカテゴリを適用（フォールバック処理）
+
+    Args:
+        store: 店舗名
+
+    Returns:
+        デフォルト分類結果（H列: 雑貨費）
+    """
+```
+
+### ChatGPT API 連携
+
+#### リクエスト形式
+```python
+request_payload = {
+    "model": "gpt-5",
+    "messages": [
+        {
+            "role": "system",
+            "content": (
+                "あなたは家計簿分類アシスタントです。\n"
+                "以下のCSV明細に対して、指定された列カテゴリに分類してください。\n"
+                "理由は返さず、JSONのみ返してください。"
+            )
+        },
+        {
+            "role": "user",
+            "content": json.dumps({
+                "mode": "THINK",
+                "entries": [
+                    {"store": "スターバックス", "amount": 560},
+                    {"store": "イオンリテール", "amount": 1234}
+                ],
+                "categories": {
+                    "C": "食材費",
+                    "D": "外食費",
+                    "E": "自己投資費",
+                    "F": "書籍代",
+                    "G": "家電",
+                    "H": "雑貨費",
+                    "I": "衣服・化粧費",
+                    "J": "娯楽",
+                    "K": "旅行費",
+                    "O": "通信費",
+                    "R": "個人娯楽",
+                    "T": "サブスク"
+                },
+                "rules": [
+                    "出力はJSONのみ",
+                    "categoryとcolumnを必ず返す",
+                    "分類不能は発生させず、すべて雑貨費（H列）に分類する"
+                ]
+            }, ensure_ascii=False)
+        }
+    ],
+    "temperature": 0.3,
+    "response_format": {"type": "json_object"}
+}
+```
+
+#### レスポンス形式
+```json
+[
+  {"store": "スターバックス", "category": "外食費", "column": "D"},
+  {"store": "イオンリテール", "category": "食材費", "column": "C"}
+]
+```
+
+### エラーハンドリング
+
+```python
+try:
+    # ChatGPT API 呼び出し
+    result = classify_unregistered_stores(stores, categories)
+except OpenAIAPIError as e:
+    # API失敗時: デフォルトカテゴリで続行
+    logger.error(f"ChatGPT API error: {e}")
+    result = [apply_default_category(store["store"]) for store in stores]
+except JSONDecodeError as e:
+    # JSON解析失敗時: デフォルトカテゴリで続行
+    logger.error(f"JSON parse error: {e}")
+    result = [apply_default_category(store["store"]) for store in stores]
+except Exception as e:
+    # その他エラー: デフォルトカテゴリで続行
+    logger.error(f"Unexpected error: {e}")
+    result = [apply_default_category(store["store"]) for store in stores]
+```
+
+### パフォーマンス最適化
+- **バッチ処理**: 未登録店舗を一括送信（最大50件/リクエスト）
+- **キャッシング**: 同一店舗名の再分類を回避
+- **レート制限対応**: exponential backoff でリトライ
+- **タイムアウト設定**: 10秒以内に応答がない場合はタイムアウト
+
+### セキュリティ要件
+- OpenAI API Key は環境変数`OPENAI_API_KEY`で管理
+- `.env`ファイルに保存、`.gitignore`対象
+- API Keyのログ出力を禁止
+
+### テストケース
+1. **正常系**: 未登録店舗50件を一括分類、全件成功
+2. **異常系**: API失敗時、デフォルトカテゴリ（H列）で続行
+3. **異常系**: JSON解析失敗時、デフォルトカテゴリで続行
+4. **境界値**: 未登録店舗0件、空リスト返却
+5. **境界値**: 未登録店舗100件、バッチ分割処理
 
 ---
 
