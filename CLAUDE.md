@@ -52,7 +52,8 @@ project_root/
 ├── config/
 │   └── service_account.json  # Google認証情報（.gitignore対象）
 ├── data/
-│   ├── mapping.json          # カテゴリマッピング
+│   ├── mapping.json          # カテゴリマッピング（廃止予定、v2.0でSQLite移行）
+│   ├── mappings.db           # SQLiteマッピングDB（v2.0～、NEW）
 │   ├── backups/              # マッピングバックアップ（.gitignore対象）
 │   └── sessions/             # セッションストア（.gitignore対象）
 │       └── sessions.db       # SQLiteセッションDB（.gitignore対象）
@@ -61,18 +62,21 @@ project_root/
 │   │   └── style.css     # カスタムCSS
 │   └── js/
 │       ├── main.js       # メイン画面用JS
-│       └── mapping.js    # マッピング管理用JS
-├── templates/                # Jinja2テンプレート（未実装）
+│       ├── mapping.js    # マッピング管理用JS
+│       └── gpt_classification.js  # ChatGPT分類確認用JS（v2.0～、NEW）
+├── templates/                # Jinja2テンプレート
 │   ├── base.html         # ベーステンプレート
 │   ├── index.html        # メイン画面
 │   ├── mapping.html      # マッピング管理画面
-│   └── result.html       # 処理結果画面
+│   ├── result.html       # 処理結果画面
+│   └── gpt_classification.html  # ChatGPT分類確認画面（v2.0～、NEW）
 └── modules/
     ├── csv_processor.py  # CSV処理モジュール
     ├── sheets_api.py     # Sheets API連携
-    ├── mapping_manager.py # マッピング管理
+    ├── mapping_manager.py # マッピング管理（v2.0でSQLite対応）
     ├── category_logic.py  # カテゴリ振り分けロジック
-    └── session_store.py   # セッションストア（SQLite）
+    ├── session_store.py   # セッションストア（SQLite）
+    └── gpt_classifier.py  # ChatGPT分類モジュール（v2.0～、NEW）
 ```
 
 ## Technology Stack
@@ -85,7 +89,8 @@ project_root/
 - **google-auth**: 2.23+ (OAuth認証)
 - **gspread**: 6.x (Google Sheets連携)
 - **chardet**: 文字コード検出
-- **SQLite**: 3.x (セッションストア、WALモード対応)
+- **SQLite**: 3.x (セッションストア、マッピングDB、WALモード対応)
+- **OpenAI API**: GPT-4o-mini (未登録店舗の自動カテゴリ分類、v2.0～)
 
 ### Frontend
 - **Bootstrap**: 5.3 (UIフレームワーク)
@@ -172,24 +177,34 @@ python app.py
 2. **カテゴリ自動判定**
    - 店舗名から外食費、日用品費、交通費などのカテゴリを自動振り分け
    - パターンマッチング（完全一致、前方一致、部分一致）
-   - 優先順位の適用
+   - 優先順位の適用（手動登録 > ChatGPT自動分類）
+   - **v2.0**: SQLiteマッピングDB対応（JSON形式から移行）
 
-3. **スプレッドシート自動更新**
+3. **ChatGPT自動分類機能（v2.0～、NEW）**
+   - 未登録店舗をChatGPT APIで自動カテゴリ分類
+   - ユーザー確認フロー（分類結果の手修正可能）
+   - SQLite一括登録（source='auto', priority=4）
+   - エラー時のフォールバック処理（デフォルトカテゴリ: H列 雑貨費）
+   - バッチ処理対応（最大50件/リクエスト）
+
+4. **スプレッドシート自動更新**
    - Googleスプレッドシートの該当する年・月・カテゴリに金額を自動加算
    - 年別シート選択（2025年、2024年など）
    - 月別行（1月～12月）・カテゴリ別列（B～V列）への書き込み
 
-4. **マッピング管理**
+5. **マッピング管理**
    - 店舗名とカテゴリの対応関係を管理・編集
    - CRUD操作（登録、更新、削除）
-   - JSON形式でデータ永続化
+   - **v1.0**: JSON形式でデータ永続化
+   - **v2.0**: SQLite形式で高速検索・トランザクション保証
 
-5. **未登録店舗管理**
+6. **未登録店舗管理**
    - マッピング未登録店舗の自動検知
    - 金額合計と処理件数の表示
    - 新規マッピング登録機能
+   - **v2.0**: ChatGPT自動分類フローへの誘導
 
-6. **セッション管理**
+7. **セッション管理**
    - 独自server_session_id実装（Flask標準session使用）
    - SQLiteベースのサーバーサイドセッションストア
    - Cookie 4KB制限の解消（大容量CSVデータ対応）
@@ -218,10 +233,18 @@ POST /process       # CSV処理実行・Sheets更新
 
 ### Mapping Management
 ```
-GET    /mapping/list            # マッピング一覧取得
-POST   /mapping/add             # 新規マッピング追加
-PUT    /mapping/edit/<id>       # マッピング編集
-DELETE /mapping/delete/<id>     # マッピング削除
+GET    /mapping/list            # マッピング一覧取得（SQLite: store_mappings）
+POST   /mapping/add             # 新規マッピング追加（SQLite INSERT）
+PUT    /mapping/edit/<id>       # マッピング編集（SQLite UPDATE）
+DELETE /mapping/delete/<id>     # マッピング削除（SQLite DELETE）
+```
+
+### ChatGPT Classification（v2.0～、NEW）
+```
+POST /gpt/classify            # 未登録店舗をChatGPTで自動分類
+GET  /gpt/classification      # ChatGPT分類結果確認画面を表示
+POST /gpt/confirm             # ユーザー確認後、SQLiteに一括登録
+POST /gpt/cancel              # ChatGPT分類をキャンセル
 ```
 
 ### Downloads
@@ -231,11 +254,24 @@ GET  /download/log  # 処理ログダウンロード
 
 ## Data Flow
 
+### 従来フロー（～v1.0）
 1. **CSVアップロード** → Shift_JIS → UTF-8 変換 → ファイル保存
 2. **CSV解析** → 明細データ抽出 → YYMMDD → YYYY/MM/DD 変換 → プレビュー返却
-3. **カテゴリ判定** → 店舗名マッピング照合 → カテゴリ・列番号決定 → 未登録店舗リスト化
+3. **カテゴリ判定** → 店舗名マッピング照合（JSON） → カテゴリ・列番号決定 → 未登録店舗リスト化
 4. **Google Sheets連携** → サービスアカウント認証 → 年シート・月行・カテゴリ列特定 → 金額加算
 5. **結果表示** → 月別・カテゴリ別サマリー → 未登録店舗リスト → 処理詳細ログ
+
+### ChatGPT分類フロー（v2.0～）
+1. **CSVアップロード** → Shift_JIS → UTF-8 変換 → ファイル保存
+2. **CSV解析** → 明細データ抽出 → YYMMDD → YYYY/MM/DD 変換 → プレビュー返却
+3. **カテゴリ判定** → 店舗名マッピング照合（SQLite: store_mappings）
+   - 登録済み店舗 → カテゴリ・列番号決定 → Step 7へ
+   - 未登録店舗 → ChatGPT分類フローへ
+4. **ChatGPT自動分類** → 未登録店舗抽出 → GPT API呼び出し → JSON分類結果受信
+5. **ユーザー確認** → 分類結果一覧表示 → 手修正可能 → 確定ボタン押下
+6. **SQLite登録** → 確定済み分類結果を一括INSERT（source='auto', priority=4）
+7. **Google Sheets連携** → サービスアカウント認証 → 年シート・月行・カテゴリ列特定 → 金額加算
+8. **結果表示** → 月別・カテゴリ別サマリー → ChatGPT分類サマリー → 未登録店舗リスト（残存分） → 処理詳細ログ
 
 ## Testing
 
@@ -243,6 +279,8 @@ GET  /download/log  # 処理ログダウンロード
 - CSVファイル処理テスト（正常/異常ケース、大容量ファイル）
 - Google Sheets API連携テスト（認証、書き込み、エラーリカバリー）
 - マッピング機能テスト（パターンマッチング、CRUD操作、データ永続化）
+- **v2.0**: SQLiteマッピングDBテスト（トランザクション、インデックス検索）
+- **v2.0**: ChatGPT分類機能テスト（API呼び出し、エラーハンドリング、フォールバック）
 - 集計処理テスト（計算ロジック、未登録店舗検知）
 - 統合テスト（エンドツーエンド、性能テスト）
 
@@ -254,6 +292,8 @@ GET  /download/log  # 処理ログダウンロード
 ### Performance Targets
 - 1000件データ処理時間: 30秒以内
 - 大容量ファイル対応: 10MB級（環境変数で上限調整可能）
+- **v2.0**: ChatGPT分類処理時間: 50件で10秒以内
+- **v2.0**: SQLiteマッピング検索: 1000件で1秒以内
 
 ## Security Considerations
 
@@ -264,13 +304,15 @@ GET  /download/log  # 処理ログダウンロード
 
 ### Credential Management
 - `config/service_account.json` は `.gitignore` 対象
+- **v2.0**: `OPENAI_API_KEY` は環境変数で管理（`.env`ファイル、`.gitignore`対象）
 - 認証情報ファイルはコンテナ内で安全に管理
 - 環境変数またはボリュームマウントで配置
 
 ### Data Security
 - CSVファイルは処理後自動削除
-- 機密情報（credentials.json等）は Git 管理対象外
+- 機密情報（credentials.json、.env等）は Git 管理対象外
 - サービスアカウント認証（OAuth不要）
+- **v2.0**: SQLiteマッピングDBは暗号化不要（機密情報なし）
 
 ### File Size Limits
 - **デフォルト上限**: 10MB（DoS攻撃防止）

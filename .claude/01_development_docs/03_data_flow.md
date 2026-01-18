@@ -2,7 +2,7 @@
 
 ## 6.4 アプリケーションデータフロー
 
-### 6.4.1 CSV取込から反映までの流れ
+### 6.4.1 CSV取込から反映までの流れ（ChatGPT分類フロー対応版）
 
 ```
 1. CSVアップロード
@@ -15,21 +15,99 @@
    ↓
 5. 実行ボタン押下
    ↓
-6. マッピング照合
-   ├─ 登録済み店舗 → カテゴリ・列番号特定
-   └─ 未登録店舗 → 一時保存
+6. マッピング照合（SQLite: store_mappings）
+   ├─ 登録済み店舗 → カテゴリ・列番号特定 → Step 10へ
+   └─ 未登録店舗 → ChatGPT分類フローへ（Step 7）
    ↓
-7. 月別・カテゴリ別集計
+7. 未登録店舗抽出
+   ├─ ユニークな店舗名リスト作成
+   ├─ 金額・出現回数の集計
+   └─ ChatGPT API 呼び出し準備
    ↓
-8. スプレッドシート書き込み
+8. ChatGPT 自動分類（gpt_classifier.py）
+   ├─ 未登録店舗リスト送信
+   ├─ カテゴリマスタ（B～V列定義）送信
+   ├─ 分類ルール送信
+   ├─ JSON形式で分類結果を受信
+   └─ エラー時: デフォルトカテゴリ（H列: 雑貨費）で続行
+   ↓
+9. ユーザー確認・手修正フロー
+   ├─ ChatGPT分類結果を一覧表示（gpt_classification.html）
+   ├─ カテゴリ・列のドロップダウンで手修正可能
+   ├─ 確定ボタン押下 → SQLite登録（source='auto', priority=4）
+   └─ キャンセル → 未登録のまま処理続行（次回再分類）
+   ↓
+10. 月別・カテゴリ別集計
+   ↓
+11. スプレッドシート書き込み
    ├─ 対象年シート選択
    ├─ 該当月の行特定
    └─ カテゴリ列に金額加算
    ↓
-9. 結果表示
+12. 結果表示
    ├─ 処理サマリー
-   ├─ 未登録店舗リスト
+   ├─ ChatGPT分類結果サマリー（NEW）
+   ├─ 未登録店舗リスト（残存分）
    └─ 詳細ログ生成
+```
+
+### 6.4.1.1 ChatGPT分類フロー詳細
+
+#### 処理シーケンス
+```
+[未登録店舗検出]
+  → [ChatGPT API呼び出し]
+  → [分類結果パース]
+  → [ユーザー確認画面]
+  → [手修正（任意）]
+  → [確定]
+  → [SQLite一括登録]
+  → [既存フロー合流]
+```
+
+#### ChatGPT APIリクエスト形式
+```json
+{
+  "mode": "THINK",
+  "entries": [
+    {"store": "スターバックス", "amount": 560},
+    {"store": "イオンリテール", "amount": 1234}
+  ],
+  "categories": {
+    "C": "食材費",
+    "D": "外食費",
+    "E": "自己投資費",
+    "F": "書籍代",
+    "G": "家電",
+    "H": "雑貨費",
+    "I": "衣服・化粧費",
+    "J": "娯楽",
+    "K": "旅行費",
+    "O": "通信費",
+    "R": "個人娯楽",
+    "T": "サブスク"
+  },
+  "rules": [
+    "出力はJSONのみ",
+    "categoryとcolumnを必ず返す",
+    "分類不能は発生させず、すべて雑貨費（H列）に分類する"
+  ]
+}
+```
+
+#### ChatGPT APIレスポンス形式
+```json
+[
+  {"store": "スターバックス", "category": "外食費", "column": "D"},
+  {"store": "イオンリテール", "category": "食材費", "column": "C"}
+]
+```
+
+#### 必須プロンプト文
+```
+あなたは家計簿分類アシスタントです。
+以下のCSV明細に対して、指定された列カテゴリに分類してください。
+理由は返さず、JSONのみ返してください。
 ```
 
 ### 6.4.2 データ構造
@@ -72,6 +150,51 @@
 ### 6.4.4 エラーハンドリング
 
 - CSV読込失敗 → エラーメッセージ表示
-- マッピング未設定 → デフォルト列（B列）に振り分け
+- マッピング未設定 → デフォルト列（B列: 支払額）に振り分け
 - API書き込み失敗 → リトライ3回、失敗時ログ保存
-- 未登録店舗 → 一時リストに保存、ユーザー確認画面表示
+- 未登録店舗 → ChatGPT分類フローへ（自動分類試行）
+- **ChatGPT API失敗** → デフォルトカテゴリ（H列: 雑貨費）で処理続行、エラーログ記録
+- **SQLite書き込み失敗** → 分類結果を破棄、処理続行、最後に失敗内容報告
+- **ユーザーキャンセル** → 未登録のまま処理続行、次回CSVアップロード時に再分類
+
+### 6.4.5 データストレージ変更（JSON → SQLite移行）
+
+#### 移行前（v1.0）
+```json
+// config/mapping.json
+{
+  "version": "1.0",
+  "mappings": [
+    {
+      "id": 1,
+      "pattern": "ユシンヤ",
+      "match_type": "contains",
+      "category": "外食費",
+      "column": "C",
+      "priority": 1
+    }
+  ]
+}
+```
+
+#### 移行後（v2.0）
+```sql
+-- data/mappings.db: store_mappings テーブル
+CREATE TABLE store_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store TEXT NOT NULL,
+    pattern TEXT,
+    match_type TEXT NOT NULL DEFAULT 'contains',
+    category TEXT NOT NULL,
+    column TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 4,
+    source TEXT NOT NULL DEFAULT 'manual',  -- 'manual' or 'auto'
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### 移行メリット
+- **高速検索**: インデックスによる効率的なマッチング
+- **トランザクション**: データ整合性保証
+- **バッチ登録**: ChatGPT分類結果の一括INSERT
+- **拡張性**: 統計情報、履歴管理の容易化
