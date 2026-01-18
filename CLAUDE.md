@@ -90,7 +90,7 @@ project_root/
 - **gspread**: 6.x (Google Sheets連携)
 - **chardet**: 文字コード検出
 - **SQLite**: 3.x (セッションストア、マッピングDB、WALモード対応)
-- **OpenAI API**: GPT-4o-mini (未登録店舗の自動カテゴリ分類、v2.0～)
+- **OpenAI API**: GPT-5 (未登録店舗の自動カテゴリ分類、v2.0～)
 
 ### Frontend
 - **Bootstrap**: 5.3 (UIフレームワーク)

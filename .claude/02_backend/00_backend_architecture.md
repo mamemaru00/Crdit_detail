@@ -67,7 +67,7 @@ project_root/
 
 **ChatGPT API認証**（NEW）
 - OpenAI API Key: 環境変数`OPENAI_API_KEY`で管理
-- モデル: GPT-4o-mini（コスト効率重視）
+- モデル: GPT-5
 - 用途: 未登録店舗の自動カテゴリ分類
 
 ---

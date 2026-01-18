@@ -120,7 +120,7 @@ sheet.update_cell(row, column, new_value)
 
 ### 主要機能
 - 未登録店舗の自動カテゴリ分類
-- OpenAI GPT-4o-mini API 連携
+- OpenAI GPT-5 API 連携
 - カテゴリマスタの動的送信
 - エラーハンドリング（API失敗時のフォールバック）
 - レート制限対応
@@ -203,7 +203,7 @@ def apply_default_category(store: str) -> Dict:
 #### リクエスト形式
 ```python
 request_payload = {
-    "model": "gpt-4o-mini",
+    "model": "gpt-5",
     "messages": [
         {
             "role": "system",
