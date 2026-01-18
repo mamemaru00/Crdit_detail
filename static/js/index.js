@@ -359,7 +359,7 @@
 
       data.unregistered_stores.forEach(function(store) {
         const li = document.createElement('li');
-        li.textContent = `${escapeHtml(store.store_name)} (${formatCurrency(store.total_amount)}, ${store.count}件)`;
+        li.textContent = `${escapeHtml(store.store)} (${formatCurrency(store.total_amount)}, ${store.count}件)`;
         unregisteredList.appendChild(li);
       });
 
@@ -403,6 +403,9 @@
    * @returns {string} エスケープ済みテキスト
    */
   function escapeHtml(text) {
+    if (text == null) {
+      return '';
+    }
     const map = {
       '&': '&amp;',
       '<': '&lt;',
