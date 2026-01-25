@@ -1680,8 +1680,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 #### Step 7.2.3: プロンプトエンジニアリング
 - [ ] カテゴリ定義プロンプト作成
   ```
-  以下の21カテゴリに店舗名を分類してください：
-  - B列: 俺の小遣い
+  以下のカテゴリに店舗名を分類してください：
   - C列: 食材費
   - D列: 外食費
   - E列: 自己投資費
@@ -1694,6 +1693,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - O列: 通信費
   - R列: 個人娯楽
   - T列: サブスク
+  ※A列は空欄、B列は月表示。カテゴリはC列から開始。
 
   【分類ルール】
   1. 店舗名の特徴（業種、商品、サービス）から最適カテゴリを判定
@@ -1703,7 +1703,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   【出力形式】
   JSON形式で以下のキーを含む：
   - category: カテゴリ名（日本語）
-  - column: 列記号（B～V）
+  - column: 列記号（C～V）
   - confidence: 確信度（high/medium/low）
   - reasoning: 判定理由（簡潔な日本語）
   ```
@@ -1711,11 +1711,11 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   ```
   【例1】
   店舗名: "ユシンヤ"
-  分類: {"category": "外食費", "column": "C", "confidence": "high", "reasoning": "飲食店"}
+  分類: {"category": "外食費", "column": "D", "confidence": "high", "reasoning": "飲食店"}
 
   【例2】
   店舗名: "AMAZON.CO.JP"
-  分類: {"category": "Amazon", "column": "R", "confidence": "high", "reasoning": "Amazonオンラインショップ"}
+  分類: {"category": "雑貨費", "column": "H", "confidence": "medium", "reasoning": "オンラインショップ（購入品により変動）"}
   ```
 
 #### Step 7.2.4: エラーハンドリング
@@ -1776,7 +1776,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
      session['gpt_classifications'] = {
          "店舗名A": {
              "category": "外食費",
-             "column": "C",
+             "column": "D",
              "confidence": "high",
              "reasoning": "飲食店"
          },
@@ -1795,8 +1795,8 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   render_template(
       'gpt_classification.html',
       classifications=session['gpt_classifications'],
-      categories=CATEGORY_MAP,  # B～V列のカテゴリ定義
-      columns=list('BCDEFGHIJKLMNOPQRSTUV')
+      categories=CATEGORY_MAP,  # C～V列のカテゴリ定義
+      columns=list('CDEFGHIJKLMNOPQRSTUV')  # B列は月表示のため除外
   )
   ```
 - [ ] セッション検証
