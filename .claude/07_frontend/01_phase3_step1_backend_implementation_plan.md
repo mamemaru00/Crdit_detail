@@ -1127,7 +1127,7 @@ showToastVanilla('#successToast', 'マッピングを追加しました');
                 data-bs-dismiss="modal" aria-label="閉じる"></button>
       </div>
       <div class="modal-body">
-        <p><span id="bulkAddCount" class="fw-bold"></span>件の未登録店舗をデフォルト列（B列）に振り分けます。</p>
+        <p><span id="bulkAddCount" class="fw-bold"></span>件の未登録店舗を一括登録します。</p>
         <p class="text-muted mb-0">この操作は元に戻せません。</p>
       </div>
       <div class="modal-footer">
@@ -1854,7 +1854,7 @@ Permissions-Policy: camera=(), geolocation=(), microphone=()
                   data-bs-dismiss="modal" aria-label="閉じる"></button>
         </div>
         <div class="modal-body">
-          <p><span id="bulkAddCount" class="fw-bold"></span>件の未登録店舗をデフォルト列（B列）に振り分けます。</p>
+          <p><span id="bulkAddCount" class="fw-bold"></span>件の未登録店舗を一括登録します。</p>
           <p class="text-muted mb-0">この操作は元に戻せません。</p>
         </div>
         <div class="modal-footer">

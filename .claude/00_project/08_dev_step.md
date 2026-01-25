@@ -54,8 +54,8 @@
   ```json
   {
     "mappings": [
-      {"pattern": "ユシンヤ", "match_type": "contains", "category": "外食費", "column": "C"},
-      {"pattern": "AMAZON", "match_type": "contains", "category": "日用品費", "column": "D"}
+      {"pattern": "ユシンヤ", "match_type": "contains", "category": "外食費", "column": "D"},
+      {"pattern": "AMAZON", "match_type": "contains", "category": "雑貨費", "column": "H"}
     ]
   }
   ```
@@ -124,7 +124,7 @@
 ##### Phase 4: カテゴリ決定・未登録店舗検出（2025-12-11完了）
 - [x] カテゴリ決定関数実装（`determine_category`）
   - [x] 店舗名からカテゴリ・列番号を返す
-  - [x] 未登録の場合はB列（支払額）を返す
+  - [x] 未登録の場合はユーザー確認画面で設定
   - [x] マッチング結果をMatchResult型で返却
 - [x] 未登録店舗検出関数実装（`detect_unregistered_stores`）
   - [x] マッチしなかった店舗をリスト化
@@ -1500,3 +1500,689 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 **ブランチ**: `feature/phase-6-documentation`
 **リモート**: プッシュ済み
+
+---
+
+## Phase 7: ChatGPT自動分類機能（v2.0）
+
+### プロジェクト概要
+
+**機能名**: ChatGPT自動分類機能（v2.0）
+**目的**: 未登録店舗をChatGPT（GPT-5）で自動カテゴリ分類し、SQLiteマッピングDBに保存することで、手動マッピング登録の手間を削減し、初回利用体験を向上させる。
+
+**実装方針**:
+- 段階的実装（Phase 7.1～7.5）
+- 既存機能への影響最小化（後方互換性維持）
+- テスト駆動開発（各フェーズで単体・統合テスト実施）
+- コスト管理（API呼び出し回数制限、エラーハンドリング）
+
+### 担当者アサイン
+
+| 役割 | 担当者 | 責務 |
+|------|--------|------|
+| **実装担当** | backend-code-generator | データベース設計、ChatGPTモジュール、バックエンドAPI実装 |
+| **実装担当** | frontend-implementation-specialist | フロントエンドUI、ユーザー確認画面、手修正機能実装 |
+| **テスト担当** | project-compliance-tester | 単体テスト、統合テスト、性能テスト、エラーハンドリング検証 |
+| **監督者** | project-orchestrator | レビュー、承認、フェーズゲート判定、全体調整 |
+
+### 開発フェーズ（段階的実装）
+
+---
+
+### Phase 7.1: データベース構築
+
+**期間**: 2日
+**担当**: backend-code-generator
+**成果物**: SQLiteマッピングDB、データ移行スクリプト
+
+#### Step 7.1.1: スキーマ設計
+- [ ] SQLiteデータベース設計
+  - **ファイル名**: `data/mappings.db`
+  - **テーブル名**: `store_mappings`
+  - **スキーマ定義**:
+    ```sql
+    CREATE TABLE store_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern TEXT NOT NULL UNIQUE,
+        match_type TEXT NOT NULL CHECK(match_type IN ('exact', 'startswith', 'contains', 'keyword')),
+        category TEXT NOT NULL,
+        column TEXT NOT NULL CHECK(LENGTH(column) = 1 AND column >= 'B' AND column <= 'V'),
+        priority INTEGER NOT NULL DEFAULT 4 CHECK(priority >= 1 AND priority <= 4),
+        source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- インデックス作成
+    CREATE INDEX idx_pattern ON store_mappings(pattern);
+    CREATE INDEX idx_match_type ON store_mappings(match_type);
+    CREATE INDEX idx_priority ON store_mappings(priority);
+    CREATE INDEX idx_source ON store_mappings(source);
+    ```
+  - **優先順位定義**:
+    - `1`: 完全一致（手動登録）
+    - `2`: 前方一致（手動登録）
+    - `3`: 部分一致（手動登録）
+    - `4`: キーワード（ChatGPT自動分類）
+
+#### Step 7.1.2: 初期データ移行
+- [ ] JSONマッピングデータ移行スクリプト作成
+  - **スクリプト名**: `scripts/migrate_json_to_sqlite.py`
+  - **機能**:
+    - `data/mapping.json` 読み込み
+    - `data/mappings.db` 作成
+    - 既存マッピングをINSERT（`source='manual'`, `priority=1/2/3`）
+    - 重複チェック（`pattern`の一意性検証）
+    - トランザクション処理（全件成功or全件ロールバック）
+  - **バックアップ**:
+    - 移行前に`data/mapping.json`を`data/backups/mapping_backup_YYYYMMDD_HHMMSS.json`にコピー
+- [ ] 移行スクリプト実行
+  - [ ] テスト環境で実行・検証
+  - [ ] 本番環境で実行
+
+#### Step 7.1.3: データベースモジュール更新
+- [ ] `modules/mapping_manager.py` をSQLite対応に更新
+  - **変更点**:
+    - `load_mappings()`: JSON読み込み → SQLite SELECT
+    - `save_mappings()`: JSON書き込み → SQLite INSERT/UPDATE
+    - `add_mapping()`: SQLite INSERT
+    - `update_mapping()`: SQLite UPDATE
+    - `delete_mapping()`: SQLite DELETE
+    - WALモード有効化（`PRAGMA journal_mode=WAL`）
+    - トランザクション処理（`BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`）
+  - **後方互換性**:
+    - `data/mappings.db`が存在しない場合、`data/mapping.json`から自動移行
+- [ ] `modules/category_logic.py` をSQLite対応に更新
+  - [ ] マッピング検索クエリ最適化（インデックス活用）
+  - [ ] 優先順位ソート（`ORDER BY priority ASC`）
+
+#### 完了条件
+- [ ] SQLiteスキーマ作成完了
+- [ ] 既存JSONデータ移行完了（データ損失0件）
+- [ ] mapping_manager.pyのSQLite対応完了
+- [ ] 単体テスト合格（CRUD操作、トランザクション処理）
+- [ ] テスト担当者レビュー完了
+- [ ] 監督者承認取得
+
+**リスク**:
+- データ移行失敗時のロールバック手順確保
+- 既存JSON機能との並行稼働期間設定
+
+---
+
+### Phase 7.2: ChatGPT分類モジュール
+
+**期間**: 3日
+**担当**: backend-code-generator
+**成果物**: `modules/gpt_classifier.py`、OpenAI API連携
+
+#### Step 7.2.1: OpenAI API設定
+- [ ] 環境変数設定
+  - **ファイル**: `.env`
+  - **変数**:
+    ```bash
+    OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
+    GPT_MODEL=gpt-5
+    GPT_MAX_TOKENS=2000
+    GPT_TEMPERATURE=0.3
+    GPT_BATCH_SIZE=50
+    ```
+  - **セキュリティ**:
+    - `.gitignore`に`.env`追加（既存）
+    - `.env.example`にテンプレート追加
+- [ ] `requirements.txt`に依存パッケージ追加
+  ```
+  openai>=1.0.0
+  ```
+
+#### Step 7.2.2: GPT分類モジュール実装
+- [ ] `modules/gpt_classifier.py` 新規作成
+  - **クラス**: `GPTClassifier`
+  - **主要メソッド**:
+    ```python
+    class GPTClassifier:
+        def __init__(self, api_key: str, model: str = "gpt-5"):
+            """初期化（OpenAI API設定）"""
+            pass
+
+        def classify_stores(self, store_names: List[str]) -> Dict[str, Dict[str, str]]:
+            """
+            未登録店舗をバッチ分類
+
+            Args:
+                store_names: 未登録店舗名のリスト（最大50件）
+
+            Returns:
+                {
+                    "store_name": {
+                        "category": "外食費",
+                        "column": "C",
+                        "confidence": "high",  # high/medium/low
+                        "reasoning": "飲食店チェーン名のため"
+                    }
+                }
+            """
+            pass
+
+        def _build_prompt(self, store_names: List[str]) -> str:
+            """プロンプト生成（カテゴリ定義、分類ルール）"""
+            pass
+
+        def _parse_response(self, response: str) -> Dict[str, Dict[str, str]]:
+            """GPT応答のJSON解析"""
+            pass
+
+        def _handle_error(self, error: Exception) -> Dict[str, Dict[str, str]]:
+            """エラーハンドリング（デフォルトカテゴリ返却）"""
+            pass
+    ```
+
+#### Step 7.2.3: プロンプトエンジニアリング
+- [ ] カテゴリ定義プロンプト作成
+  ```
+  以下の21カテゴリに店舗名を分類してください：
+  - B列: 俺の小遣い
+  - C列: 食材費
+  - D列: 外食費
+  - E列: 自己投資費
+  - F列: 書籍代
+  - G列: 家電
+  - H列: 雑貨費
+  - I列: 衣服・化粧費
+  - J列: 娯楽
+  - K列: 旅行費
+  - O列: 通信費
+  - R列: 個人娯楽
+  - T列: サブスク
+
+  【分類ルール】
+  1. 店舗名の特徴（業種、商品、サービス）から最適カテゴリを判定
+  2. 複数候補がある場合は最も高頻度の利用パターンを選択
+  3. 不明な場合はデフォルト「H列: 雑貨費」
+
+  【出力形式】
+  JSON形式で以下のキーを含む：
+  - category: カテゴリ名（日本語）
+  - column: 列記号（B～V）
+  - confidence: 確信度（high/medium/low）
+  - reasoning: 判定理由（簡潔な日本語）
+  ```
+- [ ] Few-shot学習例の追加
+  ```
+  【例1】
+  店舗名: "ユシンヤ"
+  分類: {"category": "外食費", "column": "C", "confidence": "high", "reasoning": "飲食店"}
+
+  【例2】
+  店舗名: "AMAZON.CO.JP"
+  分類: {"category": "Amazon", "column": "R", "confidence": "high", "reasoning": "Amazonオンラインショップ"}
+  ```
+
+#### Step 7.2.4: エラーハンドリング
+- [ ] API呼び出し失敗時の処理
+  - [ ] リトライ処理（最大3回、指数バックオフ）
+  - [ ] タイムアウト設定（30秒）
+  - [ ] レート制限エラー対応（429 Too Many Requests）
+- [ ] デフォルトカテゴリ設定
+  - 分類失敗時: `{"category": "雑貨費", "column": "H", "confidence": "low"}`
+- [ ] ログ記録
+  - API呼び出し履歴（店舗数、成功/失敗、レスポンス時間）
+  - エラー内容（エラーメッセージ、スタックトレース）
+
+#### 完了条件
+- [ ] `modules/gpt_classifier.py` 実装完了
+- [ ] OpenAI API連携テスト成功
+- [ ] 単体テスト合格（正常系、異常系、エラーハンドリング）
+- [ ] 50件バッチ処理で10秒以内に完了
+- [ ] テスト担当者レビュー完了
+- [ ] 監督者承認取得
+
+**リスク**:
+- API呼び出しコスト管理（月次上限設定）
+- GPT応答品質のバラツキ（プロンプト最適化）
+
+---
+
+### Phase 7.3: バックエンドAPI
+
+**期間**: 2日
+**担当**: backend-code-generator
+**成果物**: 4つの新規APIエンドポイント
+
+#### Step 7.3.1: API設計
+- [ ] エンドポイント定義
+  ```
+  POST /gpt/classify          # 未登録店舗をChatGPTで分類
+  GET  /gpt/classification    # ChatGPT分類結果確認画面を表示
+  POST /gpt/confirm           # ユーザー確認後、SQLiteに一括登録
+  POST /gpt/cancel            # ChatGPT分類をキャンセル
+  ```
+
+#### Step 7.3.2: POST /gpt/classify 実装
+- [ ] リクエスト仕様
+  ```python
+  # セッションから未登録店舗リストを取得
+  # session['unregistered_stores'] = [
+  #     {"store": "店舗名A", "total_amount": 10000, "count": 5},
+  #     ...
+  # ]
+  ```
+- [ ] 処理フロー
+  1. セッションから未登録店舗リスト取得
+  2. 店舗名のみ抽出（最大50件）
+  3. `GPTClassifier.classify_stores()` 呼び出し
+  4. 分類結果をセッションに保存
+     ```python
+     session['gpt_classifications'] = {
+         "店舗名A": {
+             "category": "外食費",
+             "column": "C",
+             "confidence": "high",
+             "reasoning": "飲食店"
+         },
+         ...
+     }
+     ```
+  5. 分類結果確認画面にリダイレクト（`GET /gpt/classification`）
+- [ ] エラーハンドリング
+  - 未登録店舗0件: `{"error": "未登録店舗が存在しません"}`
+  - API呼び出し失敗: デフォルトカテゴリ設定＋警告メッセージ
+  - 50件超過: 最初の50件のみ処理＋警告メッセージ
+
+#### Step 7.3.3: GET /gpt/classification 実装
+- [ ] レスポンス仕様
+  ```python
+  render_template(
+      'gpt_classification.html',
+      classifications=session['gpt_classifications'],
+      categories=CATEGORY_MAP,  # B～V列のカテゴリ定義
+      columns=list('BCDEFGHIJKLMNOPQRSTUV')
+  )
+  ```
+- [ ] セッション検証
+  - `session['gpt_classifications']`が存在しない場合: メイン画面にリダイレクト
+
+#### Step 7.3.4: POST /gpt/confirm 実装
+- [ ] リクエスト仕様
+  ```json
+  {
+      "classifications": [
+          {
+              "store": "店舗名A",
+              "category": "外食費",
+              "column": "C"
+          },
+          ...
+      ]
+  }
+  ```
+- [ ] 処理フロー
+  1. リクエストボディから分類結果取得
+  2. SQLite一括INSERT
+     ```python
+     for classification in classifications:
+         db.execute("""
+             INSERT INTO store_mappings
+             (pattern, match_type, category, column, priority, source)
+             VALUES (?, ?, ?, ?, ?, ?)
+         """, (
+             classification['store'],
+             'keyword',
+             classification['category'],
+             classification['column'],
+             4,  # ChatGPT自動分類の優先順位
+             'auto'
+         ))
+     ```
+  3. トランザクションコミット
+  4. セッション更新
+     - `session['unregistered_stores']`から登録済み店舗を削除
+     - `session['gpt_classifications']`をクリア
+  5. 処理完了メッセージ返却
+     ```json
+     {
+         "success": true,
+         "message": "15件の店舗マッピングを登録しました",
+         "registered_count": 15
+     }
+     ```
+- [ ] エラーハンドリング
+  - DB書き込み失敗: ロールバック＋エラーメッセージ
+  - バリデーションエラー: 400 Bad Request
+
+#### Step 7.3.5: POST /gpt/cancel 実装
+- [ ] 処理フロー
+  1. セッションから`gpt_classifications`をクリア
+  2. メイン画面にリダイレクト
+- [ ] レスポンス
+  ```json
+  {"success": true, "message": "ChatGPT分類をキャンセルしました"}
+  ```
+
+#### 完了条件
+- [ ] 4つのAPIエンドポイント実装完了
+- [ ] APIドキュメント更新（`.claude/02_backend/01_backend_api_routes.md`）
+- [ ] 単体テスト合格（正常系、異常系、セッション管理）
+- [ ] 統合テスト合格（フロー全体）
+- [ ] テスト担当者レビュー完了
+- [ ] 監督者承認取得
+
+**リスク**:
+- セッションタイムアウト時の処理（30分有効期限）
+- トランザクション失敗時のロールバック処理
+
+---
+
+### Phase 7.4: フロントエンド
+
+**期間**: 3日
+**担当**: frontend-implementation-specialist
+**成果物**: `templates/gpt_classification.html`、`static/js/gpt_classification.js`
+
+#### Step 7.4.1: 分類結果確認画面（HTML）
+- [ ] `templates/gpt_classification.html` 新規作成
+  - **レイアウト**: Bootstrap 5.3ベース
+  - **コンポーネント**:
+    ```html
+    <!-- ヘッダー -->
+    <div class="container mt-5">
+        <h2>ChatGPT自動分類結果</h2>
+        <p class="text-muted">分類結果を確認し、必要に応じて修正してください</p>
+    </div>
+
+    <!-- 分類結果テーブル -->
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>店舗名</th>
+                <th>カテゴリ</th>
+                <th>列</th>
+                <th>確信度</th>
+                <th>理由</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for store, result in classifications.items() %}
+            <tr data-store="{{ store }}">
+                <td>{{ store }}</td>
+                <td>
+                    <select class="form-select category-select">
+                        {% for category_name in categories %}
+                        <option value="{{ category_name }}"
+                                {% if category_name == result.category %}selected{% endif %}>
+                            {{ category_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select column-select">
+                        {% for col in columns %}
+                        <option value="{{ col }}"
+                                {% if col == result.column %}selected{% endif %}>
+                            {{ col }}列
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <span class="badge bg-{{ 'success' if result.confidence == 'high'
+                                        else 'warning' if result.confidence == 'medium'
+                                        else 'secondary' }}">
+                        {{ result.confidence }}
+                    </span>
+                </td>
+                <td>{{ result.reasoning }}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger delete-btn">削除</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- 確定・キャンセルボタン -->
+    <div class="d-flex justify-content-end gap-2">
+        <button class="btn btn-secondary" id="cancel-btn">キャンセル</button>
+        <button class="btn btn-primary" id="confirm-btn">確定して登録</button>
+    </div>
+    ```
+
+#### Step 7.4.2: JavaScript機能実装
+- [ ] `static/js/gpt_classification.js` 新規作成
+  - **機能1**: カテゴリ・列の連動変更
+    ```javascript
+    $('.category-select').on('change', function() {
+        const category = $(this).val();
+        const column = CATEGORY_TO_COLUMN[category];
+        $(this).closest('tr').find('.column-select').val(column);
+    });
+    ```
+  - **機能2**: 行削除
+    ```javascript
+    $('.delete-btn').on('click', function() {
+        $(this).closest('tr').remove();
+    });
+    ```
+  - **機能3**: 確定処理
+    ```javascript
+    $('#confirm-btn').on('click', function() {
+        const classifications = [];
+        $('tbody tr').each(function() {
+            classifications.push({
+                store: $(this).data('store'),
+                category: $(this).find('.category-select').val(),
+                column: $(this).find('.column-select').val()
+            });
+        });
+
+        $.ajax({
+            url: '/gpt/confirm',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ classifications }),
+            success: function(response) {
+                alert(response.message);
+                window.location.href = '/';
+            },
+            error: function(xhr) {
+                alert('エラー: ' + xhr.responseJSON.error);
+            }
+        });
+    });
+    ```
+  - **機能4**: キャンセル処理
+    ```javascript
+    $('#cancel-btn').on('click', function() {
+        if (confirm('ChatGPT分類をキャンセルしますか？')) {
+            $.post('/gpt/cancel', function() {
+                window.location.href = '/';
+            });
+        }
+    });
+    ```
+
+#### Step 7.4.3: メイン画面からの導線追加
+- [ ] `templates/index.html` 修正
+  - **追加箇所**: 未登録店舗リスト表示エリア
+  ```html
+  {% if unregistered_stores %}
+  <div class="alert alert-warning">
+      <h5>未登録店舗が {{ unregistered_stores|length }} 件あります</h5>
+      <button class="btn btn-primary" id="gpt-classify-btn">
+          ChatGPTで自動分類する
+      </button>
+      <a href="/mapping" class="btn btn-secondary">手動で登録する</a>
+  </div>
+  {% endif %}
+  ```
+- [ ] `static/js/main.js` 修正
+  ```javascript
+  $('#gpt-classify-btn').on('click', function() {
+      $.post('/gpt/classify', function() {
+          window.location.href = '/gpt/classification';
+      }).fail(function(xhr) {
+          alert('エラー: ' + xhr.responseJSON.error);
+      });
+  });
+  ```
+
+#### Step 7.4.4: レスポンシブデザイン
+- [ ] スマホ対応（Bootstrap Gridシステム活用）
+- [ ] タブレット対応
+- [ ] デスクトップ対応
+
+#### 完了条件
+- [ ] HTML/JavaScript実装完了
+- [ ] UI/UX動作確認完了
+- [ ] レスポンシブデザインテスト合格
+- [ ] ブラウザ互換性テスト合格（Chrome, Firefox, Edge）
+- [ ] テスト担当者レビュー完了
+- [ ] 監督者承認取得
+
+**リスク**:
+- 大量データ表示時のパフォーマンス（50件以上）
+- セッションタイムアウト時のエラーハンドリング
+
+---
+
+### Phase 7.5: 統合テスト＋本番リリース
+
+**期間**: 2日
+**担当**: project-compliance-tester（テスト）、project-orchestrator（承認）
+**成果物**: テストレポート、リリースノート
+
+#### Step 7.5.1: E2Eテスト
+- [ ] シナリオテスト
+  1. CSV取込 → 未登録店舗検知 → ChatGPT分類 → ユーザー確認 → SQLite登録 → Sheets更新
+  2. ChatGPT分類キャンセル → 手動マッピング登録
+  3. ChatGPT分類後に手修正 → 確定登録
+- [ ] データフローテスト
+  - セッションデータの正常性検証
+  - SQLiteトランザクション検証
+  - Google Sheets更新検証
+
+#### Step 7.5.2: エラーハンドリングテスト
+- [ ] API呼び出し失敗時のフォールバック処理
+- [ ] セッションタイムアウト時のエラーメッセージ
+- [ ] DB書き込み失敗時のロールバック
+- [ ] 50件超過時の警告メッセージ
+
+#### Step 7.5.3: パフォーマンステスト
+- [ ] ChatGPT分類処理時間計測（50件で10秒以内）
+- [ ] SQLiteマッピング検索速度計測（1000件で1秒以内）
+- [ ] 既存機能への影響評価（CSV取込処理時間）
+
+#### Step 7.5.4: セキュリティテスト
+- [ ] OPENAI_API_KEY漏洩防止確認
+- [ ] `.gitignore`に`.env`追加確認
+- [ ] SQLインジェクション脆弱性検証
+
+#### Step 7.5.5: ドキュメント更新
+- [ ] CLAUDE.md更新（v2.0機能追加）
+- [ ] README.md更新（使用方法セクション）
+- [ ] APIドキュメント更新（`.claude/02_backend/`）
+- [ ] テスト仕様書更新（`.claude/09_test/`）
+
+#### Step 7.5.6: リリース準備
+- [ ] リリースノート作成（v2.0新機能、変更点、注意事項）
+- [ ] ブランチマージ（`feature/chatgpt-classification` → `main`）
+- [ ] Dockerイメージビルド
+- [ ] 本番環境デプロイ
+- [ ] リリース後動作確認
+
+#### 完了条件
+- [ ] すべてのテスト合格
+- [ ] テストレポート作成完了
+- [ ] ドキュメント更新完了
+- [ ] リリースノート作成完了
+- [ ] 監督者最終承認取得
+- [ ] 本番環境デプロイ完了
+
+**リスク**:
+- 本番環境でのAPI呼び出しコスト超過
+- 既存機能への予期しない影響
+
+---
+
+### スケジュール目安
+
+| フェーズ | 期間 | 開始日 | 完了予定日 |
+|---------|------|--------|-----------|
+| Phase 7.1: データベース構築 | 2日 | Day 1 | Day 2 |
+| Phase 7.2: ChatGPT分類モジュール | 3日 | Day 3 | Day 5 |
+| Phase 7.3: バックエンドAPI | 2日 | Day 6 | Day 7 |
+| Phase 7.4: フロントエンド | 3日 | Day 8 | Day 10 |
+| Phase 7.5: 統合テスト＋リリース | 2日 | Day 11 | Day 12 |
+| **合計** | **12日** | - | - |
+
+**マイルストーン**:
+- Day 2: DB構築完了、データ移行成功
+- Day 5: ChatGPT分類機能単体テスト合格
+- Day 7: バックエンドAPI実装完了
+- Day 10: フロントエンド実装完了、E2Eテスト開始
+- Day 12: 本番リリース
+
+---
+
+### リスク・注意事項
+
+#### 既存機能への影響
+- **後方互換性**: v1.0のJSON形式マッピング機能を維持（自動移行スクリプト提供）
+- **パフォーマンス**: SQLite導入により検索速度向上（JSON比で5～10倍高速化）
+- **セッション管理**: 既存セッションストア（`data/sessions/sessions.db`）と新規マッピングDB（`data/mappings.db`）は独立
+
+#### API Key管理
+- **セキュリティ**:
+  - `OPENAI_API_KEY`は環境変数で管理（`.env`ファイル）
+  - `.gitignore`に`.env`追加（コミット防止）
+  - Dockerコンテナ内でのみ参照
+- **コスト管理**:
+  - API呼び出し回数制限（月次上限設定）
+  - バッチ処理サイズ制限（最大50件/リクエスト）
+  - エラー時のリトライ制限（最大3回）
+- **モニタリング**:
+  - API呼び出しログ記録（`logs/gpt_api.log`）
+  - 月次コストレポート（OpenAI Usage Dashboard）
+
+#### コスト管理（GPT-5 API呼び出し）
+- **想定コスト** (2026年1月価格):
+  - GPT-5: $0.03/1K tokens (input), $0.06/1K tokens (output)
+  - 1リクエスト（50店舗）: 約1500 tokens (input) + 1000 tokens (output) = 約$0.11
+  - 月間100回実行: 約$11（50店舗×100回=5000店舗分類）
+- **コスト削減策**:
+  - バッチ処理（50件/リクエスト）でAPI呼び出し回数削減
+  - 確信度が低い結果のみユーザー確認（高確信度は自動登録）
+  - キャッシュ機構（同一店舗名の再分類を防止）
+
+#### テスト環境
+- **API Key**: テスト用API Key使用（月次上限$5）
+- **モックAPI**: 単体テストではOpenAI APIをモック化（`unittest.mock`使用）
+
+#### フェーズゲート判定基準
+各フェーズ完了時に以下を確認：
+1. **機能要件充足**: 実装完了項目がすべてチェック済み
+2. **テスト合格**: 単体テスト・統合テストがすべて成功
+3. **ドキュメント更新**: 関連ドキュメントが最新状態
+4. **レビュー完了**: テスト担当者レビュー＋監督者承認
+
+#### 緊急時対応
+- **ロールバック手順**: v1.0（JSON形式）に戻す手順書作成
+- **サポート体制**: リリース後1週間は動作監視
+
+---
+
+### Phase 7完了評価基準
+
+- **実装完了日**: TBD
+- **総合判定基準**:
+  - ✅ すべてのフェーズ完了条件を満たす
+  - ✅ E2Eテスト合格率100%
+  - ✅ パフォーマンス目標達成（50件10秒以内、1000件検索1秒以内）
+  - ✅ セキュリティ要件充足（API Key管理、SQLインジェクション対策）
+  - ✅ コスト管理実装済み（月次上限設定、ログ記録）
+- **次のステップ**: Phase 8（将来拡張: レシート画像OCR、音声入力など）
+
+**ブランチ**: `feature/chatgpt-classification`
+**リモート**: TBD

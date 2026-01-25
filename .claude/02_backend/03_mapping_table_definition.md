@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_store_mappings_source ON store_mappings(source);
 | 高 | 2 | 手動で設定した優先マッピング | manual |
 | 中 | 3 | 手動で設定した通常マッピング | manual |
 | 低 | 4 | ChatGPT自動分類で登録されたマッピング | auto |
-| 最低 | 5 | デフォルト列（B列）への振り分け | auto |
+| 最低 | 5 | （廃止: ユーザー確認画面で設定） | - |
 
 ### source の値
 
@@ -135,7 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_unregistered_stores_last_seen ON unregistered_sto
 2. **前方一致（startswith）** - priority昇順
 3. **部分一致（contains）** - priority昇順
 4. **キーワード一致（keyword）** - priority昇順
-5. **デフォルト列（B列）** - priority=5
+5. **未登録** → ユーザー確認画面で手動設定
 
 **優先順位の適用**:
 - 同じmatch_typeの場合、priorityが**小さい**ものを優先

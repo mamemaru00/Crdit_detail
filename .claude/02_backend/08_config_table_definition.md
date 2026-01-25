@@ -9,7 +9,6 @@
 |------------|-----|------|------|------------|
 | spreadsheet_id | string | ○ | スプレッドシートID | - |
 | default_year | integer | ○ | デフォルト対象年 | 2025 |
-| default_column | string | ○ | デフォルト列 | "B" |
 | encoding | string | ○ | CSV文字コード | "Shift_JIS" |
 | auto_register | boolean | - | 自動登録フラグ | false |
 | backup_enabled | boolean | - | バックアップ有効 | false |
@@ -28,11 +27,6 @@
 - CSV処理時の対象年
 - ユーザー選択可能
 - 範囲：2020～2030
-
-### default_column
-- 未登録店舗の振り分け先
-- 値：B～V
-- 通常はB列（支払額）
 
 ### encoding
 - CSVファイルの文字コード
@@ -67,7 +61,6 @@
 {
   "spreadsheet_id": "10RJcB-_pOqsxA-6mGZ...",
   "default_year": 2025,
-  "default_column": "B",
   "encoding": "Shift_JIS",
   "auto_register": false,
   "backup_enabled": true,
@@ -82,7 +75,6 @@
 ```bash
 SPREADSHEET_ID=10RJcB-_pOqsxA-6mGZ...
 DEFAULT_YEAR=2025
-DEFAULT_COLUMN=B
 CSV_ENCODING=Shift_JIS
 AUTO_REGISTER=false
 BACKUP_ENABLED=true

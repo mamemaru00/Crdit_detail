@@ -69,7 +69,7 @@ def get_unregistered_stores(records: List[Dict]) -> List[str]:
 2. 前方一致チェック
 3. 部分一致チェック
 4. キーワード一致チェック
-5. デフォルト列（B列）に振り分け
+5. 未登録の場合はユーザー確認画面で手動設定
 ```
 
 ## 3. Google Sheets連携モジュール（sheets_client.py）
