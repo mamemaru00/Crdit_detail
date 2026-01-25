@@ -341,7 +341,7 @@
       <div class="alert alert-warning" role="status">
         <p class="mb-2">
           以下の店舗はマッピングに登録されていません。
-          デフォルト列（B列: 支払額）に振り分けました。
+          確認画面でカテゴリを設定してください。
         </p>
         <ul id="unregisteredStoresList" class="mb-2">
           <!-- JavaScriptで動的生成 -->
@@ -864,8 +864,8 @@ Body: なし（セッションからファイルパス取得）
       "total_amount": 27575,
       "total_count": 17,
       "by_category": {
-        "外食費": { "amount": 11560, "count": 8, "column": "C" },
-        "日用品費": { "amount": 7045, "count": 5, "column": "D" }
+        "食材費": { "amount": 11560, "count": 8, "column": "C" },
+        "外食費": { "amount": 7045, "count": 5, "column": "D" }
       },
       "by_month": {
         "8": {

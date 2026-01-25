@@ -54,8 +54,8 @@
   ```json
   {
     "mappings": [
-      {"pattern": "ユシンヤ", "match_type": "contains", "category": "外食費", "column": "C"},
-      {"pattern": "AMAZON", "match_type": "contains", "category": "日用品費", "column": "D"}
+      {"pattern": "ユシンヤ", "match_type": "contains", "category": "外食費", "column": "D"},
+      {"pattern": "AMAZON", "match_type": "contains", "category": "雑貨費", "column": "H"}
     ]
   }
   ```
@@ -124,7 +124,7 @@
 ##### Phase 4: カテゴリ決定・未登録店舗検出（2025-12-11完了）
 - [x] カテゴリ決定関数実装（`determine_category`）
   - [x] 店舗名からカテゴリ・列番号を返す
-  - [x] 未登録の場合はB列（支払額）を返す
+  - [x] 未登録の場合はユーザー確認画面で設定
   - [x] マッチング結果をMatchResult型で返却
 - [x] 未登録店舗検出関数実装（`detect_unregistered_stores`）
   - [x] マッチしなかった店舗をリスト化
@@ -1508,7 +1508,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 ### プロジェクト概要
 
 **機能名**: ChatGPT自動分類機能（v2.0）
-**目的**: 未登録店舗をChatGPT（GPT-4）で自動カテゴリ分類し、SQLiteマッピングDBに保存することで、手動マッピング登録の手間を削減し、初回利用体験を向上させる。
+**目的**: 未登録店舗をChatGPT（GPT-5）で自動カテゴリ分類し、SQLiteマッピングDBに保存することで、手動マッピング登録の手間を削減し、初回利用体験を向上させる。
 
 **実装方針**:
 - 段階的実装（Phase 7.1～7.5）
@@ -1622,7 +1622,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - **変数**:
     ```bash
     OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
-    GPT_MODEL=gpt-4  # または gpt-4-turbo
+    GPT_MODEL=gpt-5
     GPT_MAX_TOKENS=2000
     GPT_TEMPERATURE=0.3
     GPT_BATCH_SIZE=50
@@ -1641,7 +1641,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - **主要メソッド**:
     ```python
     class GPTClassifier:
-        def __init__(self, api_key: str, model: str = "gpt-4"):
+        def __init__(self, api_key: str, model: str = "gpt-5"):
             """初期化（OpenAI API設定）"""
             pass
 
@@ -1682,26 +1682,18 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   ```
   以下の21カテゴリに店舗名を分類してください：
   - B列: 俺の小遣い
-  - C列: 外食費
-  - D列: 日用品費
-  - E列: その他
-  - F列: 洋服代
-  - G列: 美容
+  - C列: 食材費
+  - D列: 外食費
+  - E列: 自己投資費
+  - F列: 書籍代
+  - G列: 家電
   - H列: 雑貨費
-  - I列: 実家
-  - J列: レジャー
-  - K列: 交通費
-  - L列: メガネ
-  - M列: 保育園
-  - N列: 医療費
-  - O列: 嫁の小遣い
-  - P列: スーパー
-  - Q列: ガソリン
-  - R列: Amazon
-  - S列: 食費・惣菜
-  - T列: 携帯・WIFI
-  - U列: Apple
-  - V列: 予備1
+  - I列: 衣服・化粧費
+  - J列: 娯楽
+  - K列: 旅行費
+  - O列: 通信費
+  - R列: 個人娯楽
+  - T列: サブスク
 
   【分類ルール】
   1. 店舗名の特徴（業種、商品、サービス）から最適カテゴリを判定
@@ -2154,9 +2146,9 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - API呼び出しログ記録（`logs/gpt_api.log`）
   - 月次コストレポート（OpenAI Usage Dashboard）
 
-#### コスト管理（GPT-4 API呼び出し）
+#### コスト管理（GPT-5 API呼び出し）
 - **想定コスト** (2026年1月価格):
-  - GPT-4: $0.03/1K tokens (input), $0.06/1K tokens (output)
+  - GPT-5: $0.03/1K tokens (input), $0.06/1K tokens (output)
   - 1リクエスト（50店舗）: 約1500 tokens (input) + 1000 tokens (output) = 約$0.11
   - 月間100回実行: 約$11（50店舗×100回=5000店舗分類）
 - **コスト削減策**:
