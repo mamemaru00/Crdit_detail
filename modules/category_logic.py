@@ -200,12 +200,16 @@ class InvalidMappingFormatError(CategoryLogicError):
 # ==================== Phase 2以降の関数スケルトン ====================
 # Phase 2, 3, 4で実装予定の関数を定義(pass実装)
 
-def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH) -> MappingData:
+def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH, use_sqlite: bool = True) -> MappingData:
     """
-    マッピングデータをJSONファイルから読み込む
+    マッピングデータを読み込む
+
+    SQLiteデータベースが存在する場合はそちらから読み込み、
+    存在しない場合はJSONファイルから読み込みます。
 
     Args:
-        mapping_path: マッピングファイルのパス（デフォルト: config/mapping.json）
+        mapping_path: マッピングファイルのパス（デフォルト: data/mapping.json）
+        use_sqlite: SQLiteを使用するか（デフォルト: True）
 
     Returns:
         MappingData: 読み込んだマッピングデータ
@@ -215,7 +219,34 @@ def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH) -> MappingData:
         InvalidMappingFormatError: JSON形式が不正
         MappingValidationError: 必須フィールドが不足
     """
-    # ファイルパスをPathオブジェクトに変換
+    # SQLiteモード
+    if use_sqlite:
+        db_path = Path('data/mappings.db')
+        if db_path.exists():
+            try:
+                # mapping_manager.pyからマッピング取得
+                # 循環インポートを避けるため、ここでインポート
+                from modules import mapping_manager
+                mappings = mapping_manager.get_all_mappings(use_sqlite=True)
+
+                # MappingData形式に変換
+                return {
+                    'version': '2.0',
+                    'mappings': mappings,
+                    'default': {
+                        'category': '支払額',
+                        'column': 'B',
+                        'note': '未分類はB列に振り分け'
+                    }
+                }
+            except Exception as e:
+                # SQLiteからの読み込みに失敗した場合はJSONにフォールバック
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"SQLiteからのマッピング読み込みに失敗しました: {str(e)}")
+                logger.warning("JSONファイルから読み込みます")
+
+    # JSONモード（フォールバック）
     file_path = Path(mapping_path)
 
     # ファイル存在確認
