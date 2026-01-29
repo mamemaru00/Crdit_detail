@@ -67,6 +67,17 @@ from modules.category_logic import (
 )
 
 
+# ==================== 定数定義 ====================
+
+# match_type から priority への自動導出マップ
+MATCH_TYPE_PRIORITY_MAP = {
+    'exact': 1,
+    'startswith': 2,
+    'contains': 3,
+    'keyword': 4
+}
+
+
 # ==================== ロガー設定 ====================
 
 logger = logging.getLogger(__name__)
@@ -167,7 +178,7 @@ def init_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 match_type TEXT NOT NULL CHECK(match_type IN ('exact', 'startswith', 'contains', 'keyword')),
                 category TEXT NOT NULL,
                 column_name TEXT NOT NULL CHECK(LENGTH(column_name) = 1 AND column_name >= 'C' AND column_name <= 'V'),
-                priority INTEGER NOT NULL CHECK(priority >= 1 AND priority <= 4),
+                priority INTEGER NOT NULL DEFAULT 4 CHECK(priority >= 1 AND priority <= 4),
                 source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -256,6 +267,7 @@ def ensure_database_initialized(db_path: str = DEFAULT_DB_PATH, json_path: str =
 
     logger.info("データベースファイルが存在しないため、初期化を実行します")
 
+    conn = None
     try:
         # データベース初期化
         init_database(db_path)
@@ -270,37 +282,54 @@ def ensure_database_initialized(db_path: str = DEFAULT_DB_PATH, json_path: str =
             if mappings:
                 conn = _get_db_connection(db_path)
                 cursor = conn.cursor()
-                conn.execute("BEGIN TRANSACTION")
 
-                migrated_count = 0
-                for entry in mappings:
-                    pattern = entry.get('pattern')
-                    match_type = entry.get('match_type')
-                    category = entry.get('category')
-                    column = entry.get('column')
-                    priority = entry.get('priority', 1)
+                try:
+                    conn.execute("BEGIN TRANSACTION")
 
-                    if not all([pattern, match_type, category, column]):
-                        continue
+                    migrated_count = 0
+                    for entry in mappings:
+                        pattern = entry.get('pattern')
+                        match_type = entry.get('match_type')
+                        category = entry.get('category')
+                        column = entry.get('column')
 
-                    try:
-                        cursor.execute("""
-                            INSERT INTO store_mappings (pattern, match_type, category, column_name, priority, source)
-                            VALUES (?, ?, ?, ?, ?, 'manual')
-                        """, (pattern, match_type, category, column, priority))
-                        migrated_count += 1
-                    except sqlite3.IntegrityError:
-                        # 重複はスキップ
-                        continue
+                        # priority 自動導出ロジック
+                        if 'priority' in entry and entry['priority'] is not None:
+                            priority = entry['priority']
+                        else:
+                            priority = MATCH_TYPE_PRIORITY_MAP.get(match_type, 4)
 
-                conn.commit()
-                conn.close()
+                        if not all([pattern, match_type, category, column]):
+                            continue
 
-                logger.info(f"JSONからの自動移行が完了しました: {migrated_count}件")
+                        try:
+                            cursor.execute("""
+                                INSERT INTO store_mappings (pattern, match_type, category, column_name, priority, source)
+                                VALUES (?, ?, ?, ?, ?, 'manual')
+                            """, (pattern, match_type, category, column, priority))
+                            migrated_count += 1
+                        except sqlite3.IntegrityError:
+                            # 重複はスキップ
+                            continue
+
+                    conn.commit()
+                    logger.info(f"JSONからの自動移行が完了しました: {migrated_count}件")
+
+                except sqlite3.IntegrityError as e:
+                    conn.rollback()
+                    logger.error(f"自動移行中にエラー（整合性違反）: {str(e)}")
+                    raise
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"自動移行中にエラー: {str(e)}")
+                    raise
 
     except Exception as e:
         logger.warning(f"データベース自動初期化に失敗しました: {str(e)}")
         logger.warning("JSONモードで動作します")
+    finally:
+        if conn:
+            conn.close()
 
 
 # ==================== パブリック関数（CRUD操作） ====================
@@ -529,8 +558,16 @@ def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
             match_type = entry.get('match_type')
             category = entry.get('category')
             column = entry.get('column')
-            priority = entry.get('priority', 1)
             source = entry.get('source', 'manual')
+
+            # priority 自動導出ロジック
+            if 'priority' in entry and entry['priority'] is not None:
+                # 明示的に指定された priority を使用
+                priority = entry['priority']
+            else:
+                # match_type から priority を自動導出
+                priority = MATCH_TYPE_PRIORITY_MAP.get(match_type, 4)
+                logger.debug(f"priority自動導出: match_type={match_type} → priority={priority}")
 
             # 必須フィールドチェック
             if not all([pattern, match_type, category, column]):
@@ -543,10 +580,10 @@ def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
             conn = _get_db_connection(DEFAULT_DB_PATH)
             cursor = conn.cursor()
 
-            # トランザクション開始
-            conn.execute("BEGIN TRANSACTION")
-
             try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
                 # INSERT実行（column -> column_name）
                 cursor.execute("""
                     INSERT INTO store_mappings (pattern, match_type, category, column_name, priority, source)
@@ -567,7 +604,6 @@ def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
                 """, (new_id,))
 
                 row = cursor.fetchone()
-                conn.close()
 
                 new_entry = {
                     'id': row['id'],
@@ -584,13 +620,17 @@ def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
 
             except sqlite3.IntegrityError as e:
                 conn.rollback()
-                conn.close()
                 # UNIQUE制約違反（pattern重複）
                 logger.warning(f"[CRUD:ADD] 重複エラー - pattern='{pattern}': {str(e)}")
                 raise DuplicateMappingError(
                     f"同じpatternが既に存在します: {pattern}",
                     details={'pattern': pattern, 'error': str(e)}
                 )
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
         except DuplicateMappingError:
             raise
@@ -693,16 +733,24 @@ def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> Map
                 updates['category'] = entry['category']
             if 'column' in entry:
                 updates['column_name'] = entry['column']
-            if 'priority' in entry:
-                updates['priority'] = entry['priority']
             if 'source' in entry:
                 updates['source'] = entry['source']
 
+            # priority 自動導出ロジック（match_type変更時）
+            if 'priority' in entry:
+                # 明示的に priority が指定された場合
+                updates['priority'] = entry['priority']
+            elif 'match_type' in entry:
+                # match_type のみ変更された場合、priority を自動再計算
+                new_match_type = entry['match_type']
+                auto_priority = MATCH_TYPE_PRIORITY_MAP.get(new_match_type, 4)
+                updates['priority'] = auto_priority
+                logger.debug(f"priority自動再計算: match_type={new_match_type} → priority={auto_priority}")
+
             # 更新項目がない場合
             if not updates:
-                conn.close()
                 logger.warning(f"[CRUD:UPDATE] 更新項目がありません - ID={mapping_id}")
-                return {
+                result = {
                     'id': current['id'],
                     'pattern': current['pattern'],
                     'match_type': current['match_type'],
@@ -710,11 +758,13 @@ def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> Map
                     'column': current['column_name'],
                     'priority': current['priority']
                 }
-
-            # トランザクション開始
-            conn.execute("BEGIN TRANSACTION")
+                conn.close()
+                return result
 
             try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
                 # UPDATE実行（updated_atは自動更新）
                 set_clauses = [f"{key} = ?" for key in updates.keys()]
                 sql = f"UPDATE store_mappings SET {', '.join(set_clauses)} WHERE id = ?"
@@ -731,7 +781,6 @@ def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> Map
                 """, (mapping_id,))
 
                 row = cursor.fetchone()
-                conn.close()
 
                 updated_entry = {
                     'id': row['id'],
@@ -749,12 +798,16 @@ def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> Map
 
             except sqlite3.IntegrityError as e:
                 conn.rollback()
-                conn.close()
                 logger.warning(f"[CRUD:UPDATE] 重複エラー - ID={mapping_id}: {str(e)}")
                 raise DuplicateMappingError(
                     f"同じpatternが既に存在します",
                     details={'mapping_id': mapping_id, 'error': str(e)}
                 )
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
         except MappingNotFoundError:
             raise
@@ -865,29 +918,32 @@ def delete_mapping(mapping_id: int, use_sqlite: bool = True) -> bool:
             logger.debug(f"[CRUD:DELETE] 削除対象 - ID={mapping_id}, pattern='{target_entry['pattern']}', "
                         f"category='{target_entry['category']}', match_type={target_entry['match_type']}")
 
-            # トランザクション開始
-            conn.execute("BEGIN TRANSACTION")
-
             try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
                 # DELETE実行
                 cursor.execute("DELETE FROM store_mappings WHERE id = ?", (mapping_id,))
 
                 # コミット
                 conn.commit()
-                conn.close()
 
                 logger.info(f"[CRUD:DELETE] マッピング削除成功（SQLite） - ID={mapping_id}, "
                            f"pattern='{target_entry['pattern']}'")
                 return True
 
+            except sqlite3.IntegrityError as e:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
-                conn.close()
                 logger.error(f"[CRUD:DELETE] 削除処理でエラーが発生: {str(e)}")
                 raise MappingSaveError(
                     f"マッピングの削除に失敗しました: {str(e)}",
                     details={'mapping_id': mapping_id, 'error': str(e)}
                 )
+            finally:
+                conn.close()
 
         except MappingNotFoundError:
             raise
