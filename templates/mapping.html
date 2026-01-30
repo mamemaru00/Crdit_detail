@@ -151,8 +151,8 @@
           <select class="form-select" id="matchTypeSelect" name="match_type" required>
             <option value="">選択してください</option>
             <option value="exact">完全一致</option>
-            <option value="prefix">前方一致</option>
-            <option value="partial" selected>部分一致</option>
+            <option value="startswith">前方一致</option>
+            <option value="contains" selected>部分一致</option>
             <option value="keyword">キーワード一致</option>
           </select>
           <div class="invalid-feedback">
@@ -268,8 +268,8 @@
           </label>
           <select class="form-select" id="editMatchTypeSelect" name="match_type" required>
             <option value="exact">完全一致</option>
-            <option value="prefix">前方一致</option>
-            <option value="partial">部分一致</option>
+            <option value="startswith">前方一致</option>
+            <option value="contains">部分一致</option>
             <option value="keyword">キーワード一致</option>
           </select>
           <div class="invalid-feedback">

@@ -42,6 +42,7 @@ import logging
 import platform
 import shutil
 from datetime import datetime
+import sqlite3
 
 # OS固有のファイルロックモジュールの条件付きインポート
 try:
@@ -66,9 +67,25 @@ from modules.category_logic import (
 )
 
 
+# ==================== 定数定義 ====================
+
+# match_type から priority への自動導出マップ
+MATCH_TYPE_PRIORITY_MAP = {
+    'exact': 1,
+    'startswith': 2,
+    'contains': 3,
+    'keyword': 4
+}
+
+
 # ==================== ロガー設定 ====================
 
 logger = logging.getLogger(__name__)
+
+
+# ==================== データベース設定 ====================
+
+DEFAULT_DB_PATH = 'data/mappings.db'
 
 
 # ==================== カスタム例外クラス ====================
@@ -119,11 +136,210 @@ class MappingSaveError(MappingManagerError):
     pass
 
 
+# ==================== SQLiteデータベース初期化 ====================
+
+def init_database(db_path: str = DEFAULT_DB_PATH) -> None:
+    """
+    SQLiteデータベースを初期化する
+
+    データベースファイルが存在しない場合は新規作成し、
+    store_mappingsテーブル、インデックス、トリガーを作成します。
+    既に存在する場合は何もしません。
+
+    Args:
+        db_path (str): データベースファイルのパス
+
+    Raises:
+        MappingSaveError: データベース初期化エラー時
+
+    Example:
+        >>> init_database('data/mappings.db')
+    """
+    logger.info(f"データベース初期化処理を開始: {db_path}")
+
+    try:
+        # データディレクトリが存在しない場合は作成
+        db_file = Path(db_path)
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # データベース接続
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # WALモード有効化（同時実行性向上）
+        cursor.execute("PRAGMA journal_mode=WAL")
+        logger.debug("WALモードを有効化しました")
+
+        # テーブル作成（既に存在する場合はスキップ）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS store_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern TEXT NOT NULL UNIQUE,
+                match_type TEXT NOT NULL CHECK(match_type IN ('exact', 'startswith', 'contains', 'keyword')),
+                category TEXT NOT NULL,
+                column_name TEXT NOT NULL CHECK(LENGTH(column_name) = 1 AND column_name >= 'C' AND column_name <= 'V'),
+                priority INTEGER NOT NULL DEFAULT 4 CHECK(priority >= 1 AND priority <= 4),
+                source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        logger.debug("store_mappingsテーブルを作成しました")
+
+        # インデックス作成
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pattern ON store_mappings(pattern)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_match_type ON store_mappings(match_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_priority ON store_mappings(priority)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_source ON store_mappings(source)")
+        logger.debug("インデックスを作成しました")
+
+        # 更新トリガー作成
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS update_timestamp
+            AFTER UPDATE ON store_mappings
+            FOR EACH ROW
+            BEGIN
+                UPDATE store_mappings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END
+        """)
+        logger.debug("更新トリガーを作成しました")
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"データベース初期化が完了しました: {db_path}")
+
+    except sqlite3.Error as e:
+        logger.error(f"データベース初期化エラー: {str(e)}")
+        raise MappingSaveError(
+            f"データベースの初期化に失敗しました: {str(e)}",
+            details={'db_path': db_path, 'error': str(e)}
+        )
+    except Exception as e:
+        logger.error(f"予期しないエラーが発生しました: {str(e)}")
+        raise MappingSaveError(
+            f"データベース初期化中に予期しないエラーが発生しました: {str(e)}",
+            details={'db_path': db_path, 'error': str(e)}
+        )
+
+
+def _get_db_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    """
+    データベース接続を取得する（内部ヘルパー関数）
+
+    Args:
+        db_path (str): データベースファイルのパス
+
+    Returns:
+        sqlite3.Connection: データベース接続オブジェクト
+
+    Note:
+        - Row factoryを設定して辞書形式でデータを取得可能にする
+        - WALモードを有効化
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row  # 辞書形式でデータ取得
+    conn.execute("PRAGMA journal_mode=WAL")  # WALモード有効化
+    return conn
+
+
+def ensure_database_initialized(db_path: str = DEFAULT_DB_PATH, json_path: str = DEFAULT_MAPPING_PATH) -> None:
+    """
+    データベースが初期化されていることを保証する
+
+    データベースファイルが存在しない場合:
+    1. データベースを初期化
+    2. JSONファイルが存在すれば自動移行
+
+    Args:
+        db_path (str): データベースファイルのパス
+        json_path (str): JSONファイルのパス
+
+    Note:
+        この関数はモジュールインポート時に自動的に呼び出されます
+    """
+    db_file = Path(db_path)
+    json_file = Path(json_path)
+
+    # データベースが既に存在する場合は何もしない
+    if db_file.exists():
+        return
+
+    logger.info("データベースファイルが存在しないため、初期化を実行します")
+
+    conn = None
+    try:
+        # データベース初期化
+        init_database(db_path)
+
+        # JSONファイルが存在する場合は自動移行
+        if json_file.exists():
+            logger.info("JSONファイルが見つかりました。自動移行を実行します")
+            # 簡易的な移行処理（migrate_json_to_sqlite.pyを使わない）
+            json_data = load_mapping_data(json_path, use_sqlite=False)
+            mappings = json_data.get('mappings', [])
+
+            if mappings:
+                conn = _get_db_connection(db_path)
+                cursor = conn.cursor()
+
+                try:
+                    conn.execute("BEGIN TRANSACTION")
+
+                    migrated_count = 0
+                    for entry in mappings:
+                        pattern = entry.get('pattern')
+                        match_type = entry.get('match_type')
+                        category = entry.get('category')
+                        column = entry.get('column')
+
+                        # priority 自動導出ロジック
+                        if 'priority' in entry and entry['priority'] is not None:
+                            priority = entry['priority']
+                        else:
+                            priority = MATCH_TYPE_PRIORITY_MAP.get(match_type, 4)
+
+                        if not all([pattern, match_type, category, column]):
+                            continue
+
+                        try:
+                            cursor.execute("""
+                                INSERT INTO store_mappings (pattern, match_type, category, column_name, priority, source)
+                                VALUES (?, ?, ?, ?, ?, 'manual')
+                            """, (pattern, match_type, category, column, priority))
+                            migrated_count += 1
+                        except sqlite3.IntegrityError:
+                            # 重複はスキップ
+                            continue
+
+                    conn.commit()
+                    logger.info(f"JSONからの自動移行が完了しました: {migrated_count}件")
+
+                except sqlite3.IntegrityError as e:
+                    conn.rollback()
+                    logger.error(f"自動移行中にエラー（整合性違反）: {str(e)}")
+                    raise
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"自動移行中にエラー: {str(e)}")
+                    raise
+
+    except Exception as e:
+        logger.warning(f"データベース自動初期化に失敗しました: {str(e)}")
+        logger.warning("JSONモードで動作します")
+    finally:
+        if conn:
+            conn.close()
+
+
 # ==================== パブリック関数（CRUD操作） ====================
 
-def get_all_mappings() -> List[MappingEntry]:
+def get_all_mappings(use_sqlite: bool = True) -> List[MappingEntry]:
     """
     全マッピングエントリを取得する
+
+    Args:
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         List[MappingEntry]: マッピングエントリのリスト
@@ -137,18 +353,57 @@ def get_all_mappings() -> List[MappingEntry]:
         10
     """
     logger.info("マッピング一覧を取得中")
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
-    mappings = mapping_data.get('mappings', [])
-    logger.info(f"マッピング一覧を取得しました: {len(mappings)}件")
-    return mappings
+
+    # SQLiteモード
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, pattern, match_type, category, column_name as column, priority, source
+                FROM store_mappings
+                ORDER BY priority ASC, id ASC
+            """)
+
+            mappings = []
+            for row in cursor.fetchall():
+                mappings.append({
+                    'id': row['id'],
+                    'pattern': row['pattern'],
+                    'match_type': row['match_type'],
+                    'category': row['category'],
+                    'column': row['column'],  # column_name -> column に変換
+                    'priority': row['priority']
+                })
+
+            conn.close()
+            logger.info(f"マッピング一覧を取得しました（SQLite）: {len(mappings)}件")
+            return mappings
+
+        except Exception as e:
+            logger.error(f"SQLiteからのマッピング取得に失敗: {str(e)}")
+            # フォールバックしてJSONから読み込み
+            logger.warning("JSONファイルから読み込みます")
+
+    # JSONモード（フォールバック）
+    if Path(DEFAULT_MAPPING_PATH).exists():
+        mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
+        mappings = mapping_data.get('mappings', [])
+        logger.info(f"マッピング一覧を取得しました（JSON）: {len(mappings)}件")
+        return mappings
+    else:
+        logger.warning("マッピングデータが見つかりません")
+        return []
 
 
-def get_mapping_by_id(mapping_id: int) -> Optional[MappingEntry]:
+def get_mapping_by_id(mapping_id: int, use_sqlite: bool = True) -> Optional[MappingEntry]:
     """
     ID指定でマッピングエントリを取得する
 
     Args:
         mapping_id (int): マッピングID
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         Optional[MappingEntry]: マッピングエントリ。見つからない場合はNone
@@ -159,20 +414,58 @@ def get_mapping_by_id(mapping_id: int) -> Optional[MappingEntry]:
         'ユシンヤ'
     """
     logger.info(f"マッピングID {mapping_id} を検索中")
-    mappings = get_all_mappings()
 
+    # SQLiteモード
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, pattern, match_type, category, column_name as column, priority, source
+                FROM store_mappings
+                WHERE id = ?
+            """, (mapping_id,))
+
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                entry = {
+                    'id': row['id'],
+                    'pattern': row['pattern'],
+                    'match_type': row['match_type'],
+                    'category': row['category'],
+                    'column': row['column'],
+                    'priority': row['priority']
+                }
+                logger.info(f"マッピングID {mapping_id} が見つかりました（SQLite）")
+                return entry
+            else:
+                logger.warning(f"マッピングID {mapping_id} が見つかりませんでした（SQLite）")
+                return None
+
+        except Exception as e:
+            logger.error(f"SQLiteからのマッピング取得に失敗: {str(e)}")
+            # フォールバック
+
+    # JSONモード（フォールバック）
+    mappings = get_all_mappings(use_sqlite=False)
     for entry in mappings:
         if entry.get('id') == mapping_id:
-            logger.info(f"マッピングID {mapping_id} が見つかりました")
+            logger.info(f"マッピングID {mapping_id} が見つかりました（JSON）")
             return entry
 
     logger.warning(f"マッピングID {mapping_id} が見つかりませんでした")
     return None
 
 
-def get_next_id() -> int:
+def get_next_id(use_sqlite: bool = True) -> int:
     """
     次のマッピングIDを生成する
+
+    Args:
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         int: 次のID（最大ID + 1）。エントリがない場合は1
@@ -180,21 +473,44 @@ def get_next_id() -> int:
     Example:
         >>> get_next_id()
         3
+
+    Note:
+        SQLiteモードではAUTOINCREMENTが自動的にIDを生成するため、
+        この関数はJSONモードでのみ使用されます。
     """
     logger.info("次のIDを生成中")
-    mappings = get_all_mappings()
 
+    # SQLiteモード（AUTOINCREMENTにより自動採番されるため不要）
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(id) as max_id FROM store_mappings")
+            result = cursor.fetchone()
+            conn.close()
+
+            max_id = result['max_id'] if result['max_id'] is not None else 0
+            next_id = max_id + 1
+            logger.info(f"次のID: {next_id} を生成しました（SQLite）")
+            return next_id
+
+        except Exception as e:
+            logger.error(f"SQLiteからの次ID取得に失敗: {str(e)}")
+            # フォールバック
+
+    # JSONモード
+    mappings = get_all_mappings(use_sqlite=False)
     if not mappings:
         logger.info("マッピングが空のため、ID 1 を返却")
         return 1
 
     max_id = max(entry.get('id', 0) for entry in mappings)
     next_id = max_id + 1
-    logger.info(f"次のID: {next_id} を生成しました")
+    logger.info(f"次のID: {next_id} を生成しました（JSON）")
     return next_id
 
 
-def add_mapping(entry: Dict) -> MappingEntry:
+def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
     """
     新規マッピングエントリを追加する
 
@@ -204,10 +520,11 @@ def add_mapping(entry: Dict) -> MappingEntry:
                 - pattern (str): 店舗名パターン
                 - match_type (str): 一致方法(exact, startswith, contains, keyword)
                 - category (str): カテゴリ名
-                - column (str): 列番号(B～V)
+                - column (str): 列番号(C～V)
                 - priority (int): 優先順位(1～4)
             オプショナルフィールド:
                 - note (str): 備考
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         MappingEntry: 追加されたマッピングエントリ（IDを含む）
@@ -233,12 +550,101 @@ def add_mapping(entry: Dict) -> MappingEntry:
                 f"match_type={entry.get('match_type')}, category='{entry.get('category')}', "
                 f"column={entry.get('column')}, priority={entry.get('priority')}")
 
-    # 現在のデータを読み込み
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    # SQLiteモード
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            # 基本バリデーション（ID不要）
+            pattern = entry.get('pattern')
+            match_type = entry.get('match_type')
+            category = entry.get('category')
+            column = entry.get('column')
+            source = entry.get('source', 'manual')
+
+            # priority 自動導出ロジック
+            if 'priority' in entry and entry['priority'] is not None:
+                # 明示的に指定された priority を使用
+                priority = entry['priority']
+            else:
+                # match_type から priority を自動導出
+                priority = MATCH_TYPE_PRIORITY_MAP.get(match_type, 4)
+                logger.debug(f"priority自動導出: match_type={match_type} → priority={priority}")
+
+            # 必須フィールドチェック
+            if not all([pattern, match_type, category, column]):
+                raise MappingValidationError(
+                    "必須フィールドが不足しています",
+                    details={'entry': entry}
+                )
+
+            # データベース接続
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+
+            try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
+                # INSERT実行（column -> column_name）
+                cursor.execute("""
+                    INSERT INTO store_mappings (pattern, match_type, category, column_name, priority, source)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (pattern, match_type, category, column, priority, source))
+
+                # 挿入されたIDを取得
+                new_id = cursor.lastrowid
+
+                # コミット
+                conn.commit()
+
+                # 挿入されたレコードを取得
+                cursor.execute("""
+                    SELECT id, pattern, match_type, category, column_name as column, priority, source
+                    FROM store_mappings
+                    WHERE id = ?
+                """, (new_id,))
+
+                row = cursor.fetchone()
+
+                new_entry = {
+                    'id': row['id'],
+                    'pattern': row['pattern'],
+                    'match_type': row['match_type'],
+                    'category': row['category'],
+                    'column': row['column'],
+                    'priority': row['priority']
+                }
+
+                logger.info(f"[CRUD:ADD] マッピング追加成功（SQLite） - ID={new_id}, "
+                           f"pattern='{new_entry['pattern']}', category='{new_entry['category']}'")
+                return new_entry
+
+            except sqlite3.IntegrityError as e:
+                conn.rollback()
+                # UNIQUE制約違反（pattern重複）
+                logger.warning(f"[CRUD:ADD] 重複エラー - pattern='{pattern}': {str(e)}")
+                raise DuplicateMappingError(
+                    f"同じpatternが既に存在します: {pattern}",
+                    details={'pattern': pattern, 'error': str(e)}
+                )
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+        except DuplicateMappingError:
+            raise
+        except Exception as e:
+            logger.error(f"SQLiteへのマッピング追加に失敗: {str(e)}")
+            # フォールバックしてJSONに保存
+            logger.warning("JSONファイルへの保存を試みます")
+
+    # JSONモード（フォールバック）
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
 
     # 次のIDを生成
-    next_id = get_next_id()
+    next_id = get_next_id(use_sqlite=False)
 
     # エントリにIDを付与
     new_entry = entry.copy()
@@ -259,18 +665,19 @@ def add_mapping(entry: Dict) -> MappingEntry:
     # ファイル保存
     _save_mapping_data(mapping_data)
 
-    logger.info(f"[CRUD:ADD] マッピング追加成功 - ID={next_id}, pattern='{new_entry['pattern']}', "
+    logger.info(f"[CRUD:ADD] マッピング追加成功（JSON） - ID={next_id}, pattern='{new_entry['pattern']}', "
                 f"category='{new_entry['category']}', 総件数={len(mappings)}件")
     return new_entry
 
 
-def update_mapping(mapping_id: int, entry: Dict) -> MappingEntry:
+def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> MappingEntry:
     """
     マッピングエントリを更新する
 
     Args:
         mapping_id (int): 更新対象のマッピングID
         entry (Dict): 更新内容（部分更新対応）
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         MappingEntry: 更新後のマッピングエントリ
@@ -288,8 +695,130 @@ def update_mapping(mapping_id: int, entry: Dict) -> MappingEntry:
     """
     logger.info(f"[CRUD:UPDATE] マッピング更新処理開始 - ID={mapping_id}, 更新項目={list(entry.keys())}")
 
-    # 現在のデータを読み込み
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    # SQLiteモード
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+
+            # 既存レコードを取得
+            cursor.execute("""
+                SELECT id, pattern, match_type, category, column_name, priority, source
+                FROM store_mappings
+                WHERE id = ?
+            """, (mapping_id,))
+
+            row = cursor.fetchone()
+
+            if not row:
+                conn.close()
+                logger.warning(f"[CRUD:UPDATE] 更新対象が見つかりません（SQLite） - ID={mapping_id}")
+                raise MappingNotFoundError(
+                    f"ID {mapping_id} のマッピングが見つかりません",
+                    details={'mapping_id': mapping_id}
+                )
+
+            # 現在の値を取得
+            current = dict(row)
+            logger.debug(f"[CRUD:UPDATE] 更新前 - ID={mapping_id}, pattern='{current['pattern']}', "
+                        f"category='{current['category']}', priority={current['priority']}")
+
+            # 更新値をマージ（column -> column_name変換）
+            updates = {}
+            if 'pattern' in entry:
+                updates['pattern'] = entry['pattern']
+            if 'match_type' in entry:
+                updates['match_type'] = entry['match_type']
+            if 'category' in entry:
+                updates['category'] = entry['category']
+            if 'column' in entry:
+                updates['column_name'] = entry['column']
+            if 'source' in entry:
+                updates['source'] = entry['source']
+
+            # priority 自動導出ロジック（match_type変更時）
+            if 'priority' in entry:
+                # 明示的に priority が指定された場合
+                updates['priority'] = entry['priority']
+            elif 'match_type' in entry:
+                # match_type のみ変更された場合、priority を自動再計算
+                new_match_type = entry['match_type']
+                auto_priority = MATCH_TYPE_PRIORITY_MAP.get(new_match_type, 4)
+                updates['priority'] = auto_priority
+                logger.debug(f"priority自動再計算: match_type={new_match_type} → priority={auto_priority}")
+
+            # 更新項目がない場合
+            if not updates:
+                logger.warning(f"[CRUD:UPDATE] 更新項目がありません - ID={mapping_id}")
+                result = {
+                    'id': current['id'],
+                    'pattern': current['pattern'],
+                    'match_type': current['match_type'],
+                    'category': current['category'],
+                    'column': current['column_name'],
+                    'priority': current['priority']
+                }
+                conn.close()
+                return result
+
+            try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
+                # UPDATE実行（updated_atは自動更新）
+                set_clauses = [f"{key} = ?" for key in updates.keys()]
+                sql = f"UPDATE store_mappings SET {', '.join(set_clauses)} WHERE id = ?"
+                cursor.execute(sql, list(updates.values()) + [mapping_id])
+
+                # コミット
+                conn.commit()
+
+                # 更新後のレコードを取得
+                cursor.execute("""
+                    SELECT id, pattern, match_type, category, column_name as column, priority, source
+                    FROM store_mappings
+                    WHERE id = ?
+                """, (mapping_id,))
+
+                row = cursor.fetchone()
+
+                updated_entry = {
+                    'id': row['id'],
+                    'pattern': row['pattern'],
+                    'match_type': row['match_type'],
+                    'category': row['category'],
+                    'column': row['column'],
+                    'priority': row['priority']
+                }
+
+                logger.info(f"[CRUD:UPDATE] マッピング更新成功（SQLite） - ID={mapping_id}, "
+                           f"pattern='{updated_entry['pattern']}', category='{updated_entry['category']}', "
+                           f"priority={updated_entry['priority']}")
+                return updated_entry
+
+            except sqlite3.IntegrityError as e:
+                conn.rollback()
+                logger.warning(f"[CRUD:UPDATE] 重複エラー - ID={mapping_id}: {str(e)}")
+                raise DuplicateMappingError(
+                    f"同じpatternが既に存在します",
+                    details={'mapping_id': mapping_id, 'error': str(e)}
+                )
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+        except MappingNotFoundError:
+            raise
+        except DuplicateMappingError:
+            raise
+        except Exception as e:
+            logger.error(f"SQLiteでのマッピング更新に失敗: {str(e)}")
+            # フォールバック
+
+    # JSONモード（フォールバック）
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
 
     # 対象エントリを検索
@@ -304,7 +833,7 @@ def update_mapping(mapping_id: int, entry: Dict) -> MappingEntry:
 
     # 見つからない場合
     if target_entry is None:
-        logger.warning(f"[CRUD:UPDATE] 更新対象が見つかりません - ID={mapping_id}")
+        logger.warning(f"[CRUD:UPDATE] 更新対象が見つかりません（JSON） - ID={mapping_id}")
         raise MappingNotFoundError(
             f"ID {mapping_id} のマッピングが見つかりません",
             details={'mapping_id': mapping_id}
@@ -335,17 +864,18 @@ def update_mapping(mapping_id: int, entry: Dict) -> MappingEntry:
     # ファイル保存
     _save_mapping_data(mapping_data)
 
-    logger.info(f"[CRUD:UPDATE] マッピング更新成功 - ID={mapping_id}, pattern='{updated_entry['pattern']}', "
+    logger.info(f"[CRUD:UPDATE] マッピング更新成功（JSON） - ID={mapping_id}, pattern='{updated_entry['pattern']}', "
                 f"category='{updated_entry['category']}', priority={updated_entry['priority']}")
     return updated_entry
 
 
-def delete_mapping(mapping_id: int) -> bool:
+def delete_mapping(mapping_id: int, use_sqlite: bool = True) -> bool:
     """
     マッピングエントリを削除する
 
     Args:
         mapping_id (int): 削除対象のマッピングID
+        use_sqlite (bool): SQLiteを使用するか（デフォルト: True）
 
     Returns:
         bool: 削除成功時True
@@ -361,8 +891,68 @@ def delete_mapping(mapping_id: int) -> bool:
     """
     logger.info(f"[CRUD:DELETE] マッピング削除処理開始 - ID={mapping_id}")
 
-    # 現在のデータを読み込み
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    # SQLiteモード
+    if use_sqlite and Path(DEFAULT_DB_PATH).exists():
+        try:
+            conn = _get_db_connection(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+
+            # 削除前のレコードを取得（監査用）
+            cursor.execute("""
+                SELECT id, pattern, category, match_type
+                FROM store_mappings
+                WHERE id = ?
+            """, (mapping_id,))
+
+            row = cursor.fetchone()
+
+            if not row:
+                conn.close()
+                logger.warning(f"[CRUD:DELETE] 削除対象が見つかりません（SQLite） - ID={mapping_id}")
+                raise MappingNotFoundError(
+                    f"ID {mapping_id} のマッピングが見つかりません",
+                    details={'mapping_id': mapping_id}
+                )
+
+            target_entry = dict(row)
+            logger.debug(f"[CRUD:DELETE] 削除対象 - ID={mapping_id}, pattern='{target_entry['pattern']}', "
+                        f"category='{target_entry['category']}', match_type={target_entry['match_type']}")
+
+            try:
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+
+                # DELETE実行
+                cursor.execute("DELETE FROM store_mappings WHERE id = ?", (mapping_id,))
+
+                # コミット
+                conn.commit()
+
+                logger.info(f"[CRUD:DELETE] マッピング削除成功（SQLite） - ID={mapping_id}, "
+                           f"pattern='{target_entry['pattern']}'")
+                return True
+
+            except sqlite3.IntegrityError as e:
+                conn.rollback()
+                raise
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"[CRUD:DELETE] 削除処理でエラーが発生: {str(e)}")
+                raise MappingSaveError(
+                    f"マッピングの削除に失敗しました: {str(e)}",
+                    details={'mapping_id': mapping_id, 'error': str(e)}
+                )
+            finally:
+                conn.close()
+
+        except MappingNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"SQLiteでのマッピング削除に失敗: {str(e)}")
+            # フォールバック
+
+    # JSONモード（フォールバック）
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
     original_count = len(mappings)
 
@@ -375,7 +965,7 @@ def delete_mapping(mapping_id: int) -> bool:
 
     # 見つからない場合
     if target_entry is None:
-        logger.warning(f"[CRUD:DELETE] 削除対象が見つかりません - ID={mapping_id}")
+        logger.warning(f"[CRUD:DELETE] 削除対象が見つかりません（JSON） - ID={mapping_id}")
         raise MappingNotFoundError(
             f"ID {mapping_id} のマッピングが見つかりません",
             details={'mapping_id': mapping_id}
@@ -392,7 +982,7 @@ def delete_mapping(mapping_id: int) -> bool:
     # ファイル保存
     _save_mapping_data(mapping_data)
 
-    logger.info(f"[CRUD:DELETE] マッピング削除成功 - ID={mapping_id}, pattern='{target_entry.get('pattern')}', "
+    logger.info(f"[CRUD:DELETE] マッピング削除成功（JSON） - ID={mapping_id}, pattern='{target_entry.get('pattern')}', "
                 f"削除前={original_count}件, 削除後={len(mappings)}件")
     return True
 
@@ -606,3 +1196,12 @@ def _save_mapping_data(data: MappingData) -> None:
                 logger.debug(f"一時ファイルを削除しました: {temp_path}")
             except Exception as e:
                 logger.warning(f"一時ファイル削除中にエラーが発生しました: {str(e)}")
+
+
+# ==================== モジュール初期化 ====================
+
+# モジュールロード時にデータベースを自動初期化
+try:
+    ensure_database_initialized()
+except Exception as e:
+    logger.warning(f"データベース自動初期化をスキップしました: {str(e)}")

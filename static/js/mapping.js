@@ -30,8 +30,8 @@ let editingMappingId = null;
 // 一致方法の日本語ラベルマッピング
 const MATCH_TYPE_LABELS = {
   'exact': '完全一致',
-  'prefix': '前方一致',
-  'partial': '部分一致',
+  'startswith': '前方一致',
+  'contains': '部分一致',
   'keyword': 'キーワード一致'
 };
 

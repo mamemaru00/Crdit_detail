@@ -40,23 +40,23 @@ CSV処理結果の集計データ。APIレスポンスとして返却され、�
   "year": 2025,
   "month": 8,
   "by_category": {
-    "外食費": {
+    "食材費": {
       "column": "C",
       "amount": 11560,
       "count": 8
     },
-    "日用品費": {
+    "外食費": {
       "column": "D",
       "amount": 7045,
       "count": 5
     },
-    "娯楽費": {
-      "column": "G",
+    "雑貨費": {
+      "column": "H",
       "amount": 3100,
       "count": 3
     },
-    "交通費": {
-      "column": "N",
+    "通信費": {
+      "column": "O",
       "amount": 5870,
       "count": 1
     }

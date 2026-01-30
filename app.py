@@ -709,18 +709,6 @@ def mapping_list():
     logger.info("マッピング一覧取得処理を開始")
 
     try:
-        # マッピングファイルの存在確認
-        if not os.path.exists(app.config['MAPPING_FILE']):
-            logger.warning(f"マッピングファイルが見つかりません: {app.config['MAPPING_FILE']}")
-            return jsonify(create_response(
-                'success',
-                data={
-                    'mappings': [],
-                    'count': 0
-                },
-                message='マッピングファイルが存在しないため、空のリストを返します'
-            ))
-
         # マッピングマネージャーを使用して全件取得
         mappings = mapping_manager.get_all_mappings()
 
@@ -756,7 +744,7 @@ def mapping_add():
             'pattern': str,         # 店舗名パターン
             'category': str,        # カテゴリ名
             'column': str,          # 列記号（A-Z）
-            'match_type': str       # マッチタイプ（exact, prefix, partial）
+            'match_type': str       # マッチタイプ（exact, startswith, contains）
         }
 
     Returns:
@@ -879,7 +867,7 @@ def mapping_edit(mapping_id: int):
         logger.info(
             f"マッピング更新成功: "
             f"ID={updated_mapping['id']}, "
-            f"store_name={updated_mapping['store_name']}"
+            f"pattern={updated_mapping['pattern']}"
         )
 
         return jsonify(create_response(
