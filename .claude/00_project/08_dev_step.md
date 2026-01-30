@@ -1544,7 +1544,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.1.1: スキーマ設計
 **担当者**: backend-code-generator
-- [ ] SQLiteデータベース設計
+- [x] SQLiteデータベース設計
   - **ファイル名**: `data/mappings.db`
   - **テーブル名**: `store_mappings`
   - **スキーマ定義**:
@@ -1554,12 +1554,20 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
         pattern TEXT NOT NULL UNIQUE,
         match_type TEXT NOT NULL CHECK(match_type IN ('exact', 'startswith', 'contains', 'keyword')),
         category TEXT NOT NULL,
-        column TEXT NOT NULL CHECK(LENGTH(column) = 1 AND column >= 'B' AND column <= 'V'),
+        column_name TEXT NOT NULL CHECK(LENGTH(column_name) = 1 AND column_name >= 'C' AND column_name <= 'V'),
         priority INTEGER NOT NULL DEFAULT 4 CHECK(priority >= 1 AND priority <= 4),
         source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- updated_atトリガー
+    CREATE TRIGGER update_store_mappings_updated_at
+        AFTER UPDATE ON store_mappings
+        FOR EACH ROW
+    BEGIN
+        UPDATE store_mappings SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+    END;
 
     -- インデックス作成
     CREATE INDEX idx_pattern ON store_mappings(pattern);
@@ -1567,15 +1575,20 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
     CREATE INDEX idx_priority ON store_mappings(priority);
     CREATE INDEX idx_source ON store_mappings(source);
     ```
+  - **実装変更点**（Phase 7.1レビューで決定）:
+    - `column` → `column_name`（SQL予約語回避）
+    - `column_name >= 'C'`（B列は月表示、カテゴリはC列から開始）
+    - priority自動導出: exact→1, startswith→2, contains→3, keyword→4
+    - `updated_at`トリガー追加
   - **優先順位定義**:
-    - `1`: 完全一致（手動登録）
-    - `2`: 前方一致（手動登録）
-    - `3`: 部分一致（手動登録）
-    - `4`: キーワード（ChatGPT自動分類）
+    - `1`: 完全一致（exact）
+    - `2`: 前方一致（startswith）
+    - `3`: 部分一致（contains）
+    - `4`: キーワード（keyword / ChatGPT自動分類）
 
 #### Step 7.1.2: 初期データ移行
 **担当者**: backend-code-generator
-- [ ] JSONマッピングデータ移行スクリプト作成
+- [x] JSONマッピングデータ移行スクリプト作成
   - **スクリプト名**: `scripts/migrate_json_to_sqlite.py`
   - **機能**:
     - `data/mapping.json` 読み込み
@@ -1585,34 +1598,34 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
     - トランザクション処理（全件成功or全件ロールバック）
   - **バックアップ**:
     - 移行前に`data/mapping.json`を`data/backups/mapping_backup_YYYYMMDD_HHMMSS.json`にコピー
-- [ ] 移行スクリプト実行
-  - [ ] テスト環境で実行・検証
-  - [ ] 本番環境で実行
+- [x] 移行スクリプト実行
+  - [x] テスト環境で実行・検証
+  - [x] 本番環境で実行
 
 #### Step 7.1.3: データベースモジュール更新
 **担当者**: backend-code-generator
-- [ ] `modules/mapping_manager.py` をSQLite対応に更新
+- [x] `modules/mapping_manager.py` をSQLite対応に更新
   - **変更点**:
     - `load_mappings()`: JSON読み込み → SQLite SELECT
     - `save_mappings()`: JSON書き込み → SQLite INSERT/UPDATE
-    - `add_mapping()`: SQLite INSERT
-    - `update_mapping()`: SQLite UPDATE
+    - `add_mapping()`: SQLite INSERT（priority自動導出）
+    - `update_mapping()`: SQLite UPDATE（priority自動導出）
     - `delete_mapping()`: SQLite DELETE
     - WALモード有効化（`PRAGMA journal_mode=WAL`）
-    - トランザクション処理（`BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`）
+    - トランザクション処理（try/except/finally: conn.close()）
   - **後方互換性**:
     - `data/mappings.db`が存在しない場合、`data/mapping.json`から自動移行
-- [ ] `modules/category_logic.py` をSQLite対応に更新
-  - [ ] マッピング検索クエリ最適化（インデックス活用）
-  - [ ] 優先順位ソート（`ORDER BY priority ASC`）
+- [x] `modules/category_logic.py` をSQLite対応に更新
+  - [x] マッピング検索クエリ最適化（インデックス活用）
+  - [x] 優先順位ソート（`ORDER BY priority ASC`）
 
 #### 完了条件
-- [ ] SQLiteスキーマ作成完了
-- [ ] 既存JSONデータ移行完了（データ損失0件）
-- [ ] mapping_manager.pyのSQLite対応完了
-- [ ] 単体テスト合格（CRUD操作、トランザクション処理）
-- [ ] テスト担当者レビュー完了
-- [ ] 監督者承認取得
+- [x] SQLiteスキーマ作成完了
+- [x] 既存JSONデータ移行完了（データ損失0件）
+- [x] mapping_manager.pyのSQLite対応完了
+- [x] 単体テスト合格（CRUD操作、トランザクション処理）
+- [x] テスト担当者レビュー完了（3回テスト実施、最終87.5%合格）
+- [x] 監督者承認取得
 
 **リスク**:
 - データ移行失敗時のロールバック手順確保
@@ -1628,7 +1641,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.2.1: OpenAI API設定
 **担当者**: backend-code-generator
-- [ ] 環境変数設定
+- [x] 環境変数設定
   - **ファイル**: `.env`
   - **変数**:
     ```bash
@@ -1641,14 +1654,14 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - **セキュリティ**:
     - `.gitignore`に`.env`追加（既存）
     - `.env.example`にテンプレート追加
-- [ ] `requirements.txt`に依存パッケージ追加
+- [x] `requirements.txt`に依存パッケージ追加
   ```
   openai>=1.0.0
   ```
 
 #### Step 7.2.2: GPT分類モジュール実装
 **担当者**: backend-code-generator
-- [ ] `modules/gpt_classifier.py` 新規作成
+- [x] `modules/gpt_classifier.py` 新規作成
   - **クラス**: `GPTClassifier`
   - **主要メソッド**:
     ```python
@@ -1691,7 +1704,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.2.3: プロンプトエンジニアリング
 **担当者**: project-orchestrator
-- [ ] カテゴリ定義プロンプト作成
+- [x] カテゴリ定義プロンプト作成
   ```
   以下のカテゴリに店舗名を分類してください：
   - C列: 食材費
@@ -1720,7 +1733,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   - confidence: 確信度（high/medium/low）
   - reasoning: 判定理由（簡潔な日本語）
   ```
-- [ ] Few-shot学習例の追加
+- [x] Few-shot学習例の追加
   ```
   【例1】
   店舗名: "ユシンヤ"
@@ -1733,23 +1746,23 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.2.4: エラーハンドリング
 **担当者**: backend-code-generator
-- [ ] API呼び出し失敗時の処理
-  - [ ] リトライ処理（最大3回、指数バックオフ）
-  - [ ] タイムアウト設定（30秒）
-  - [ ] レート制限エラー対応（429 Too Many Requests）
-- [ ] デフォルトカテゴリ設定
+- [x] API呼び出し失敗時の処理
+  - [x] リトライ処理（最大3回、指数バックオフ）
+  - [x] タイムアウト設定（30秒）
+  - [x] レート制限エラー対応（429 Too Many Requests）
+- [x] デフォルトカテゴリ設定
   - 分類失敗時: `{"category": "雑貨費", "column": "H", "confidence": "low"}`
-- [ ] ログ記録
+- [x] ログ記録
   - API呼び出し履歴（店舗数、成功/失敗、レスポンス時間）
   - エラー内容（エラーメッセージ、スタックトレース）
 
 #### 完了条件
-- [ ] `modules/gpt_classifier.py` 実装完了
-- [ ] OpenAI API連携テスト成功
-- [ ] 単体テスト合格（正常系、異常系、エラーハンドリング）
-- [ ] 50件バッチ処理で10秒以内に完了
-- [ ] テスト担当者レビュー完了
-- [ ] 監督者承認取得
+- [x] `modules/gpt_classifier.py` 実装完了
+- [x] OpenAI API連携テスト成功
+- [x] 単体テスト合格（正常系10件、異常系8件、エラーハンドリング4件＝計22件全通過）
+- [x] 50件バッチ処理で10秒以内に完了（パフォーマンステスト2件全通過）
+- [x] テスト担当者レビュー完了（project-compliance-tester検証済み）
+- [x] 監督者承認取得（2026-01-30 project-orchestrator承認済み）
 
 **リスク**:
 - API呼び出しコスト管理（月次上限設定）

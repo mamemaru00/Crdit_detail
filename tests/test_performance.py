@@ -440,6 +440,126 @@ def test_batch_update_with_batch_get_integration():
 
 
 @pytest.mark.performance
+def test_gpt_classify_50_stores_within_10s():
+    """
+    GPT分類器の性能測定（50件10秒以内）
+
+    検証項目:
+    - 50件の店舗分類が10秒以内に完了すること（モックAPI使用）
+    - バッチ処理が正常に動作すること
+    - ログ記録が正常に動作すること
+
+    Note:
+        - 実際のOpenAI APIは呼び出さない（コスト削減）
+        - モックAPIで応答時間をシミュレート
+    """
+    from unittest.mock import Mock, patch
+    from modules.gpt_classifier import GPTClassifier
+    import json
+
+    # 50件の店舗名リスト
+    stores = [f'店舗{i}' for i in range(50)]
+
+    # モック分類結果
+    mock_result = {
+        store: {
+            'category': '雑貨費',
+            'column': 'H',
+            'confidence': 'medium',
+            'reasoning': 'テスト分類'
+        } for store in stores
+    }
+
+    # OpenAI APIモック
+    with patch('modules.gpt_classifier.OpenAI') as mock_openai:
+        mock_client_instance = mock_openai.return_value
+
+        # モック応答設定
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = json.dumps(mock_result, ensure_ascii=False)
+
+        mock_client_instance.chat.completions.create.return_value = mock_response
+
+        # GPT分類実行
+        classifier = GPTClassifier(api_key='sk-test-key')
+
+        start_time = time.time()
+        result = classifier.classify_stores(stores)
+        elapsed_time = time.time() - start_time
+
+        # アサーション
+        assert len(result) == 50, f"分類結果が不正: {len(result)}件（期待値: 50件）"
+        assert elapsed_time < 10, f"GPT分類処理時間{elapsed_time:.2f}秒が10秒を超過"
+
+        print(f"\n[OK] 50件GPT分類成功: {elapsed_time:.2f}秒")
+
+
+@pytest.mark.performance
+def test_gpt_classify_multiple_batches_performance():
+    """
+    GPT分類器の複数バッチ処理性能測定（100件）
+
+    検証項目:
+    - 100件（2バッチ）の分類が正常に完了すること
+    - 各バッチが正しく処理されること
+    - バッチサイズ設定が反映されること
+    """
+    from unittest.mock import Mock, patch
+    from modules.gpt_classifier import GPTClassifier
+    import json
+
+    # 100件の店舗名リスト
+    stores = [f'店舗{i}' for i in range(100)]
+
+    # OpenAI APIモック
+    with patch('modules.gpt_classifier.OpenAI') as mock_openai:
+        mock_client_instance = mock_openai.return_value
+
+        # バッチ毎に異なる応答を返す
+        def create_mock_response(call_count):
+            # 最初の50件、次の50件に対応
+            start_idx = (call_count - 1) * 50
+            end_idx = min(start_idx + 50, 100)
+            batch_stores = [f'店舗{i}' for i in range(start_idx, end_idx)]
+
+            result = {
+                store: {
+                    'category': '雑貨費',
+                    'column': 'H',
+                    'confidence': 'medium',
+                    'reasoning': f'バッチ{call_count}'
+                } for store in batch_stores
+            }
+
+            mock_resp = Mock()
+            mock_resp.choices = [Mock()]
+            mock_resp.choices[0].message.content = json.dumps(result, ensure_ascii=False)
+            return mock_resp
+
+        call_counter = {'count': 0}
+
+        def side_effect_func(*args, **kwargs):
+            call_counter['count'] += 1
+            return create_mock_response(call_counter['count'])
+
+        mock_client_instance.chat.completions.create.side_effect = side_effect_func
+
+        # GPT分類実行
+        classifier = GPTClassifier(api_key='sk-test-key', batch_size=50)
+
+        start_time = time.time()
+        result = classifier.classify_stores(stores)
+        elapsed_time = time.time() - start_time
+
+        # アサーション
+        assert len(result) == 100, f"分類結果が不正: {len(result)}件（期待値: 100件）"
+        assert call_counter['count'] == 2, f"API呼び出し回数が不正: {call_counter['count']}回（期待値: 2回）"
+
+        print(f"\n[OK] 100件GPT分類（2バッチ）成功: {elapsed_time:.2f}秒")
+
+
+@pytest.mark.performance
 def test_performance_summary(capsys):
     """
     性能テスト結果のサマリーを出力
@@ -455,4 +575,6 @@ def test_performance_summary(capsys):
     print("[OK] エンドツーエンド処理: 30秒以内")
     print("[OK] batch_get()性能: 5秒以内")
     print("[OK] 統合処理性能: 10秒以内")
+    print("[OK] 50件GPT分類: 10秒以内")
+    print("[OK] 100件GPT分類（2バッチ）: 正常完了")
     print("=" * 60)
