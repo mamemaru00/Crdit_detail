@@ -30,7 +30,8 @@ from modules import csv_processor
 from modules import category_logic
 from modules import mapping_manager
 from modules import sheets_api
-from config import config
+from modules.gpt_classifier import GPTClassifier, CATEGORY_MASTER
+from config import config, Config
 
 # ==================== アプリケーション初期化 ====================
 
@@ -945,6 +946,289 @@ def mapping_delete(mapping_id: int):
 
     except Exception as e:
         return handle_error(e, "マッピングの削除に失敗しました")
+
+
+# ==================== ChatGPT分類API ====================
+
+@app.route('/gpt/classify', methods=['POST'])
+@csrf.exempt  # APIエンドポイントのため
+def gpt_classify():
+    """
+    未登録店舗をChatGPTで自動分類
+
+    セッションストアから未登録店舗を取得し、ChatGPT APIを使用して
+    自動的にカテゴリを分類します。分類結果はセッションストアに保存され、
+    確認画面へリダイレクトします。
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'redirect_url': str,
+                'classified_count': int
+            },
+            'message': str
+        }
+
+    Raises:
+        400: 未登録店舗が存在しない
+        500: ChatGPT API エラー
+    """
+    logger.info("ChatGPT自動分類処理を開始")
+
+    try:
+        # 1. セッションストアから未登録店舗を取得
+        session_data = session_store.load(get_server_session_id()) or {}
+        unregistered_stores = session_data.get('process_result', {}).get('unregistered_stores')
+
+        if not unregistered_stores or len(unregistered_stores) == 0:
+            logger.warning("未登録店舗が存在しません")
+            return jsonify(create_response(
+                'error',
+                message='分類対象の未登録店舗が存在しません。先にCSV処理を実行してください'
+            )), 400
+
+        # 2. 店舗名リストを抽出
+        store_names = [store['store'] for store in unregistered_stores]
+
+        logger.info(f"ChatGPT分類対象店舗: {len(store_names)}件")
+
+        # 3. GPTClassifierを初期化
+        api_key = Config.OPENAI_API_KEY
+        if not api_key:
+            logger.error("OpenAI APIキーが設定されていません")
+            return jsonify(create_response(
+                'error',
+                message='ChatGPT分類機能が利用できません（APIキー未設定）'
+            )), 500
+
+        classifier = GPTClassifier(
+            api_key=api_key,
+            model=Config.GPT_MODEL,
+            max_tokens=Config.GPT_MAX_TOKENS,
+            temperature=Config.GPT_TEMPERATURE,
+            batch_size=Config.GPT_BATCH_SIZE
+        )
+
+        # 4. ChatGPT分類実行
+        classifications = classifier.classify_stores(store_names)
+
+        logger.info(f"ChatGPT分類完了: {len(classifications)}件")
+
+        # 5. 分類結果をセッションストアに保存
+        try:
+            session_data['gpt_classifications'] = classifications
+            session_store.save(get_server_session_id(), session_data)
+        except Exception as e:
+            return handle_error(e, "分類結果の保存に失敗しました")
+
+        # 6. 成功レスポンス
+        return jsonify(create_response(
+            'success',
+            data={
+                'redirect_url': '/gpt/classification',
+                'classified_count': len(classifications)
+            },
+            message=f'{len(classifications)}件の店舗を分類しました。確認画面へ移動します'
+        ))
+
+    except Exception as e:
+        return handle_error(e, "ChatGPT分類処理に失敗しました")
+
+
+@app.route('/gpt/classification')
+def gpt_classification():
+    """
+    ChatGPT分類結果確認画面を表示
+
+    セッションストアから分類結果を取得し、ユーザーが確認・修正できる
+    画面を表示します。分類結果が存在しない場合はメイン画面にリダイレクトします。
+
+    Returns:
+        str: gpt_classification.htmlのレンダリング結果 または リダイレクト
+    """
+    logger.info("ChatGPT分類結果確認画面を表示")
+
+    # セッションストアから分類結果を取得
+    session_data = session_store.load(get_server_session_id()) or {}
+    classifications = session_data.get('gpt_classifications')
+
+    if not classifications:
+        logger.warning("ChatGPT分類結果がセッションに存在しません。メイン画面にリダイレクトします")
+        return redirect(url_for('index'))
+
+    # カテゴリマスタと列リストをテンプレートに渡す
+    return render_template(
+        'gpt_classification.html',
+        classifications=classifications,
+        category_master=CATEGORY_MASTER,
+        columns=list('CDEFGHIJKLMNOPQRSTUV')
+    )
+
+
+@app.route('/gpt/confirm', methods=['POST'])
+@csrf.exempt  # APIエンドポイントのため
+def gpt_confirm():
+    """
+    ユーザー確認後、ChatGPT分類結果をSQLiteに一括登録
+
+    Request JSON:
+        {
+            'classifications': [
+                {
+                    'store_name': str,
+                    'category': str,
+                    'column': str
+                },
+                ...
+            ]
+        }
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'data': {
+                'registered_count': int,
+                'failed_count': int
+            },
+            'message': str
+        }
+
+    Raises:
+        400: パラメータ不正
+        500: データベース登録エラー
+    """
+    logger.info("ChatGPT分類確定処理を開始")
+
+    try:
+        # 1. リクエストデータ取得
+        request_data = request.get_json()
+
+        if not request_data:
+            logger.warning("リクエストボディが空です")
+            return jsonify(create_response(
+                'error',
+                message='リクエストパラメータが不正です'
+            )), 400
+
+        classifications = request_data.get('classifications', [])
+
+        if not classifications or not isinstance(classifications, list):
+            logger.warning("classificationsが不正です")
+            return jsonify(create_response(
+                'error',
+                message='分類データが不正です'
+            )), 400
+
+        logger.info(f"SQLite登録対象: {len(classifications)}件")
+
+        # 2. 各エントリをSQLiteに登録
+        registered_count = 0
+        failed_count = 0
+        registered_stores = set()
+
+        for entry in classifications:
+            try:
+                store_name = entry.get('store')
+                category = entry.get('category')
+                column = entry.get('column')
+
+                if not all([store_name, category, column]):
+                    logger.warning(f"必須フィールド不足: {entry}")
+                    failed_count += 1
+                    continue
+
+                # mapping_manager.add_mapping を使用して登録
+                # source='auto', priority=4 でChatGPT自動分類を明示
+                mapping_data = {
+                    'pattern': store_name,
+                    'match_type': 'keyword',
+                    'category': category,
+                    'column': column,
+                    'priority': 4,
+                    'source': 'auto'
+                }
+
+                mapping_manager.add_mapping(mapping_data)
+                registered_count += 1
+                registered_stores.add(store_name)
+
+                logger.debug(f"マッピング登録成功: {store_name} → {category} ({column}列)")
+
+            except mapping_manager.DuplicateMappingError:
+                # 重複エラーは警告のみ（既に登録済み）
+                logger.warning(f"マッピング重複（スキップ）: {store_name}")
+                failed_count += 1
+
+            except Exception as e:
+                logger.error(f"マッピング登録エラー: {store_name} - {str(e)}")
+                failed_count += 1
+
+        # 3. セッション更新（gpt_classificationsクリア＋登録済み店舗をunregistered_storesから削除）
+        try:
+            session_data = session_store.load(get_server_session_id()) or {}
+            session_data.pop('gpt_classifications', None)
+
+            # 登録済み店舗をunregistered_storesから削除
+            if registered_stores:
+                process_result = session_data.get('process_result', {})
+                unregistered = process_result.get('unregistered_stores', [])
+                process_result['unregistered_stores'] = [
+                    s for s in unregistered if s.get('store') not in registered_stores
+                ]
+                session_data['process_result'] = process_result
+
+            session_store.save(get_server_session_id(), session_data)
+        except Exception as e:
+            logger.warning(f"セッション更新中にエラー: {str(e)}")
+
+        logger.info(f"ChatGPT分類確定完了: 登録={registered_count}件, 失敗={failed_count}件")
+
+        # 4. 成功レスポンス
+        return jsonify(create_response(
+            'success',
+            data={
+                'registered_count': registered_count,
+                'failed_count': failed_count
+            },
+            message=f'{registered_count}件のマッピングを登録しました'
+        ))
+
+    except Exception as e:
+        return handle_error(e, "ChatGPT分類の確定処理に失敗しました")
+
+
+@app.route('/gpt/cancel', methods=['POST'])
+@csrf.exempt  # APIエンドポイントのため
+def gpt_cancel():
+    """
+    ChatGPT分類をキャンセル
+
+    セッションストアから gpt_classifications をクリアします。
+
+    Returns:
+        JSON: {
+            'status': 'success',
+            'message': str
+        }
+    """
+    logger.info("ChatGPT分類キャンセル処理を開始")
+
+    try:
+        # セッションストアから gpt_classifications をクリア
+        session_data = session_store.load(get_server_session_id()) or {}
+        session_data.pop('gpt_classifications', None)
+        session_store.save(get_server_session_id(), session_data)
+
+        logger.info("ChatGPT分類をキャンセルしました")
+
+        return jsonify(create_response(
+            'success',
+            message='ChatGPT分類をキャンセルしました'
+        ))
+
+    except Exception as e:
+        return handle_error(e, "ChatGPT分類のキャンセル処理に失敗しました")
 
 
 # ==================== エラーハンドリング・クリーンアップ ====================

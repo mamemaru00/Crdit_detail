@@ -1778,7 +1778,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.3.1: API設計
 **担当者**: backend-code-generator
-- [ ] エンドポイント定義
+- [x] エンドポイント定義
   ```
   POST /gpt/classify          # 未登録店舗をChatGPTで分類
   GET  /gpt/classification    # ChatGPT分類結果確認画面を表示
@@ -1788,7 +1788,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.3.2: POST /gpt/classify 実装
 **担当者**: backend-code-generator
-- [ ] リクエスト仕様
+- [x] リクエスト仕様
   ```python
   # セッションから未登録店舗リストを取得
   # session['unregistered_stores'] = [
@@ -1796,7 +1796,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
   #     ...
   # ]
   ```
-- [ ] 処理フロー
+- [x] 処理フロー
   1. セッションから未登録店舗リスト取得
   2. 店舗名のみ抽出（最大50件）
   3. `GPTClassifier.classify_stores()` 呼び出し
@@ -1813,14 +1813,14 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
      }
      ```
   5. 分類結果確認画面にリダイレクト（`GET /gpt/classification`）
-- [ ] エラーハンドリング
+- [x] エラーハンドリング
   - 未登録店舗0件: `{"error": "未登録店舗が存在しません"}`
   - API呼び出し失敗: デフォルトカテゴリ設定＋警告メッセージ
   - 50件超過: 最初の50件のみ処理＋警告メッセージ
 
 #### Step 7.3.3: GET /gpt/classification 実装
 **担当者**: backend-code-generator
-- [ ] レスポンス仕様
+- [x] レスポンス仕様
   ```python
   render_template(
       'gpt_classification.html',
@@ -1829,12 +1829,12 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
       columns=list('CDEFGHIJKLMNOPQRSTUV')  # B列は月表示のため除外
   )
   ```
-- [ ] セッション検証
+- [x] セッション検証
   - `session['gpt_classifications']`が存在しない場合: メイン画面にリダイレクト
 
 #### Step 7.3.4: POST /gpt/confirm 実装
 **担当者**: backend-code-generator
-- [ ] リクエスト仕様
+- [x] リクエスト仕様
   ```json
   {
       "classifications": [
@@ -1847,7 +1847,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
       ]
   }
   ```
-- [ ] 処理フロー
+- [x] 処理フロー
   1. リクエストボディから分類結果取得
   2. SQLite一括INSERT
      ```python
@@ -1877,26 +1877,26 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
          "registered_count": 15
      }
      ```
-- [ ] エラーハンドリング
+- [x] エラーハンドリング
   - DB書き込み失敗: ロールバック＋エラーメッセージ
   - バリデーションエラー: 400 Bad Request
 
 #### Step 7.3.5: POST /gpt/cancel 実装
 **担当者**: backend-code-generator
-- [ ] 処理フロー
+- [x] 処理フロー
   1. セッションから`gpt_classifications`をクリア
   2. メイン画面にリダイレクト
-- [ ] レスポンス
+- [x] レスポンス
   ```json
   {"success": true, "message": "ChatGPT分類をキャンセルしました"}
   ```
 
 #### 完了条件
-- [ ] 4つのAPIエンドポイント実装完了
+- [x] 4つのAPIエンドポイント実装完了
 - [ ] APIドキュメント更新（`.claude/02_backend/01_backend_api_routes.md`）
-- [ ] 単体テスト合格（正常系、異常系、セッション管理）
+- [x] 単体テスト合格（正常系、異常系、セッション管理）
 - [ ] 統合テスト合格（フロー全体）
-- [ ] テスト担当者レビュー完了
+- [x] テスト担当者レビュー完了（project-compliance-tester 85.7%→修正後100%）
 - [ ] 監督者承認取得
 
 **リスク**:
