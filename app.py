@@ -1076,7 +1076,7 @@ def gpt_confirm():
         {
             'classifications': [
                 {
-                    'store_name': str,
+                    'store': str,
                     'category': str,
                     'column': str
                 },
