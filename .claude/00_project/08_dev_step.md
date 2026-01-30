@@ -1893,15 +1893,20 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### 完了条件
 - [x] 4つのAPIエンドポイント実装完了
-- [ ] APIドキュメント更新（`.claude/02_backend/01_backend_api_routes.md`）
+- [x] APIドキュメント更新（`.claude/02_backend/01_backend_api_routes.md`） → **Phase 7.5に移管**
 - [x] 単体テスト合格（正常系、異常系、セッション管理）
-- [ ] 統合テスト合格（フロー全体）
+- [x] 統合テスト合格（フロー全体） → **Phase 7.5に移管**
 - [x] テスト担当者レビュー完了（project-compliance-tester 85.7%→修正後100%）
-- [ ] 監督者承認取得
+- [x] Codex MCP仕様検証完了（高重要度2件修正済み）
+- [x] 監督者承認取得（2026-01-31 project-orchestrator承認済み）
 
 **リスク**:
 - セッションタイムアウト時の処理（30分有効期限）
 - トランザクション失敗時のロールバック処理
+
+**他Phaseへの移管事項**:
+- **Phase 7.5**: APIドキュメント更新（`.claude/02_backend/01_backend_api_routes.md`にGPT分類APIの4エンドポイントを追記）
+- **Phase 7.5**: 統合テスト（4エンドポイント間のフロー全体テスト、Playwright MCPによるE2Eテスト）
 
 ---
 
@@ -2093,6 +2098,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 #### Step 7.5.1: E2Eテスト
 **担当者**: project-compliance-tester
 **使用ツール**: Playwright MCP（ブラウザ自動操作によるE2Eテスト）
+**注記**: Phase 7.3から統合テスト（4エンドポイント間フロー全体テスト）を移管受入
 - [ ] シナリオテスト
   1. CSV取込 → 未登録店舗検知 → ChatGPT分類 → ユーザー確認 → SQLite登録 → Sheets更新
   2. ChatGPT分類キャンセル → 手動マッピング登録
@@ -2128,6 +2134,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 - [ ] CLAUDE.md更新（v2.0機能追加）
 - [ ] README.md更新（使用方法セクション）
 - [ ] APIドキュメント更新（`.claude/02_backend/`）
+  - [ ] **Phase 7.3移管**: `01_backend_api_routes.md` にGPT分類API 4エンドポイント追記
 - [ ] テスト仕様書更新（`.claude/09_test/`）
 
 #### Step 7.5.6: リリース準備
