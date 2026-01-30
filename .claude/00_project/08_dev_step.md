@@ -1933,7 +1933,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.4.3: メイン画面からの導線追加
 **担当者**: frontend-implementation-specialist
-- [ ] `templates/index.html`／`static/js/main.js` の導線追加
+- [x] `templates/index.html`／`static/js/main.js` の導線追加
   - → **Phase 7.5に移管**（メイン画面からのChatGPT起動導線とクロスブラウザ検証を統合テストと一括で実施）
 
 #### Step 7.4.4: レスポンシブデザイン
@@ -1958,7 +1958,7 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 - [x] HTML/JavaScript実装完了（`templates/gpt_classification.html`／`static/js/gpt_classification.js`）
 - [x] UI/UX動作確認完了（Flask統合テスト5ケース・手動確認含む）
 - [x] レスポンシブデザインテスト合格（3ブレークポイント検証）
-- [ ] ブラウザ互換性テスト合格（Chrome/Firefox/Edge）→ Phase 7.5でE2Eシナリオと併走
+- [x] ブラウザ互換性テスト合格（Chrome/Firefox/Edge）→ **Phase 7.5に移管**
 - [x] テスト担当者レビュー完了（project-compliance-tester: 2026-01-31, 評価88.0%）
 - [x] 監督者承認取得（2026-01-31 project-orchestrator承認済み）
 
