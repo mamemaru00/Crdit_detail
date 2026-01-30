@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}ChatGPT自動分類 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- ヘッダー -->
+  <div class="mb-4">
+    <h2>
+      <i class="bi bi-robot"></i> ChatGPT自動分類結果
+    </h2>
+    <p class="text-muted">
+      分類結果を確認し、必要に応じて修正してください。カテゴリを変更すると列番号が自動的に連動します。
+    </p>
+  </div>
+
+  <!-- 分類結果テーブル -->
+  <section class="card mb-4">
+    <div class="card-header bg-primary text-white">
+      <h3 class="h5 mb-0">
+        <i class="bi bi-list-check"></i> 分類結果一覧
+      </h3>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover table-striped align-middle" id="classificationTable">
+          <thead class="table-dark">
+            <tr>
+              <th scope="col" style="width: 25%;">店舗名</th>
+              <th scope="col" style="width: 25%;">カテゴリ</th>
+              <th scope="col" style="width: 10%;">列</th>
+              <th scope="col" style="width: 10%;">確信度</th>
+              <th scope="col" style="width: 25%;">理由</th>
+              <th scope="col" style="width: 5%;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for store_name, result in classifications.items() %}
+            <tr data-store="{{ store_name }}">
+              <td>
+                <strong>{{ store_name }}</strong>
+              </td>
+              <td>
+                <select class="form-select form-select-sm category-select" aria-label="カテゴリ選択">
+                  {% for col, cat_name in category_master.items() %}
+                  <option value="{{ cat_name }}"
+                          data-column="{{ col }}"
+                          {% if cat_name == result.category %}selected{% endif %}>
+                    {{ cat_name }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select class="form-select form-select-sm column-select" aria-label="列選択">
+                  {% for col in columns %}
+                  <option value="{{ col }}"
+                          {% if col == result.column %}selected{% endif %}>
+                    {{ col }}列
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                {% if result.confidence == 'high' %}
+                <span class="badge bg-success">
+                  <i class="bi bi-check-circle"></i> 高
+                </span>
+                {% elif result.confidence == 'medium' %}
+                <span class="badge bg-warning text-dark">
+                  <i class="bi bi-exclamation-triangle"></i> 中
+                </span>
+                {% else %}
+                <span class="badge bg-secondary">
+                  <i class="bi bi-question-circle"></i> 低
+                </span>
+                {% endif %}
+              </td>
+              <td>
+                <small class="text-muted">{{ result.reasoning }}</small>
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger delete-btn"
+                        aria-label="{{ store_name }}を削除">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 確定・キャンセルボタン -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <span class="text-muted">
+        分類件数: <strong id="classificationCount">{{ classifications|length }}</strong>件
+      </span>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary" id="cancel-btn">
+        <i class="bi bi-x-circle"></i> キャンセル
+      </button>
+      <button class="btn btn-primary" id="confirm-btn">
+        <i class="bi bi-check-circle"></i> 確定して登録
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- カテゴリマスタをJavaScriptで使用するためのグローバル変数 -->
+<script>
+  // カテゴリ名→列番号のマッピング（Jinja2テンプレートから生成）
+  const CATEGORY_TO_COLUMN = {
+    {% for col, cat_name in category_master.items() %}
+    '{{ cat_name }}': '{{ col }}'{% if not loop.last %},{% endif %}
+    {% endfor %}
+  };
+</script>
+
+<!-- ChatGPT分類確認画面用JavaScript -->
+<script src="{{ url_for('static', filename='js/gpt_classification.js') }}"></script>
+{% endblock %}
