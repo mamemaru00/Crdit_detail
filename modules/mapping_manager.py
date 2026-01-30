@@ -276,7 +276,7 @@ def ensure_database_initialized(db_path: str = DEFAULT_DB_PATH, json_path: str =
         if json_file.exists():
             logger.info("JSONファイルが見つかりました。自動移行を実行します")
             # 簡易的な移行処理（migrate_json_to_sqlite.pyを使わない）
-            json_data = load_mapping_data(json_path)
+            json_data = load_mapping_data(json_path, use_sqlite=False)
             mappings = json_data.get('mappings', [])
 
             if mappings:
@@ -388,7 +388,7 @@ def get_all_mappings(use_sqlite: bool = True) -> List[MappingEntry]:
 
     # JSONモード（フォールバック）
     if Path(DEFAULT_MAPPING_PATH).exists():
-        mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+        mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
         mappings = mapping_data.get('mappings', [])
         logger.info(f"マッピング一覧を取得しました（JSON）: {len(mappings)}件")
         return mappings
@@ -640,7 +640,7 @@ def add_mapping(entry: Dict, use_sqlite: bool = True) -> MappingEntry:
             logger.warning("JSONファイルへの保存を試みます")
 
     # JSONモード（フォールバック）
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
 
     # 次のIDを生成
@@ -818,7 +818,7 @@ def update_mapping(mapping_id: int, entry: Dict, use_sqlite: bool = True) -> Map
             # フォールバック
 
     # JSONモード（フォールバック）
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
 
     # 対象エントリを検索
@@ -952,7 +952,7 @@ def delete_mapping(mapping_id: int, use_sqlite: bool = True) -> bool:
             # フォールバック
 
     # JSONモード（フォールバック）
-    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH)
+    mapping_data = load_mapping_data(DEFAULT_MAPPING_PATH, use_sqlite=False)
     mappings = mapping_data.get('mappings', [])
     original_count = len(mappings)
 
