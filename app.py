@@ -24,6 +24,10 @@ from pathlib import Path
 from datetime import datetime
 import json
 import uuid
+from dotenv import load_dotenv
+
+# .envファイルから環境変数をロード（config.pyより前に実行）
+load_dotenv()
 
 # プロジェクトモジュールのインポート
 from modules import csv_processor
@@ -951,7 +955,6 @@ def mapping_delete(mapping_id: int):
 # ==================== ChatGPT分類API ====================
 
 @app.route('/gpt/classify', methods=['POST'])
-@csrf.exempt  # APIエンドポイントのため
 def gpt_classify():
     """
     未登録店舗をChatGPTで自動分類
@@ -1067,7 +1070,6 @@ def gpt_classification():
 
 
 @app.route('/gpt/confirm', methods=['POST'])
-@csrf.exempt  # APIエンドポイントのため
 def gpt_confirm():
     """
     ユーザー確認後、ChatGPT分類結果をSQLiteに一括登録
@@ -1138,6 +1140,19 @@ def gpt_confirm():
                     failed_count += 1
                     continue
 
+                # 列番号の範囲チェック（C～V列のみ有効）
+                valid_columns = set('CDEFGHIJKLMNOPQRSTUV')
+                if column not in valid_columns:
+                    logger.warning(f"不正な列番号: {column}")
+                    failed_count += 1
+                    continue
+
+                # カテゴリ名の文字列長制限
+                if len(category) > 50:
+                    logger.warning(f"カテゴリ名が長すぎます: {len(category)}文字")
+                    failed_count += 1
+                    continue
+
                 # mapping_manager.add_mapping を使用して登録
                 # source='auto', priority=4 でChatGPT自動分類を明示
                 mapping_data = {
@@ -1199,7 +1214,6 @@ def gpt_confirm():
 
 
 @app.route('/gpt/cancel', methods=['POST'])
-@csrf.exempt  # APIエンドポイントのため
 def gpt_cancel():
     """
     ChatGPT分類をキャンセル

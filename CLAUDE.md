@@ -89,6 +89,7 @@ project_root/
 - **google-auth**: 2.23+ (OAuth認証)
 - **gspread**: 6.x (Google Sheets連携)
 - **chardet**: 文字コード検出
+- **python-dotenv**: 1.0+ (環境変数管理、.env読み込み)
 - **SQLite**: 3.x (セッションストア、マッピングDB、WALモード対応)
 - **OpenAI API**: GPT-5 (未登録店舗の自動カテゴリ分類、v2.0～)
 
@@ -136,17 +137,53 @@ docker-compose down
 ブラウザで `http://localhost:5000` にアクセス
 
 ### Environment Variables
+
+**`.env`ファイルによる環境変数管理（推奨）**:
+プロジェクトルートに`.env`ファイルを作成し、以下の環境変数を設定します。`.env.example`をコピーして使用してください。
+
 ```bash
+# .envファイル例
+# OpenAI API設定（ChatGPT分類機能 v2.0）
+OPENAI_API_KEY=your-api-key-here
+GPT_MODEL=gpt-5
+GPT_MAX_TOKENS=2000
+GPT_TEMPERATURE=0.3
+GPT_BATCH_SIZE=50
+
+# Flask設定
+SECRET_KEY=your-secret-key-here
+
+# Google Sheets設定
+SPREADSHEET_ID=your-spreadsheet-id-here
+
+# アプリケーション設定
+DEFAULT_YEAR=2025
+LOG_LEVEL=INFO
+SESSION_TTL_SECONDS=1800
+CSV_MAX_FILE_SIZE=10485760  # 10MB（デフォルト）
+
 # CSVファイルサイズ上限設定（オプション）
-# Windows
-set CSV_MAX_FILE_SIZE=20971520  # 20MB
-
-# Mac/Linux
-export CSV_MAX_FILE_SIZE=20971520  # 20MB
-
 # デフォルト: 10MB (10485760 bytes)
 # テスト用: 20MB (20971520 bytes)
 # 本番推奨: 10MB（セキュリティ重視）
+```
+
+**注意事項**:
+- `.env`ファイルは`.gitignore`で管理対象外です（機密情報保護）
+- `.env.example`はテンプレートファイルで、Git管理対象です
+- `python-dotenv`ライブラリが自動的に`.env`を読み込みます
+- Docker環境では`docker-compose.yml`の`env_file`設定で`.env`を読み込みます
+
+**従来の環境変数設定（Mac/Linux）**:
+```bash
+# CSVファイルサイズ上限設定（オプション）
+export CSV_MAX_FILE_SIZE=20971520  # 20MB
+```
+
+**従来の環境変数設定（Windows）**:
+```bash
+# CSVファイルサイズ上限設定（オプション）
+set CSV_MAX_FILE_SIZE=20971520  # 20MB
 ```
 
 ### Python Development (venv)

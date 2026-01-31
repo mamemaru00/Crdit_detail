@@ -25,6 +25,9 @@ services:
     expose:
       - "5000"
 
+    env_file:
+      - .env
+
     volumes:
       # 認証情報（読み取り専用）
       - ./config:/app/config:ro
