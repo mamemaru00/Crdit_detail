@@ -374,7 +374,8 @@ def get_all_mappings(use_sqlite: bool = True) -> List[MappingEntry]:
                     'match_type': row['match_type'],
                     'category': row['category'],
                     'column': row['column'],  # column_name -> column に変換
-                    'priority': row['priority']
+                    'priority': row['priority'],
+                    'source': row['source']
                 })
 
             conn.close()
@@ -437,7 +438,8 @@ def get_mapping_by_id(mapping_id: int, use_sqlite: bool = True) -> Optional[Mapp
                     'match_type': row['match_type'],
                     'category': row['category'],
                     'column': row['column'],
-                    'priority': row['priority']
+                    'priority': row['priority'],
+                    'source': row['source']
                 }
                 logger.info(f"マッピングID {mapping_id} が見つかりました（SQLite）")
                 return entry
