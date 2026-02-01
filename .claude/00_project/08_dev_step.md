@@ -2054,11 +2054,24 @@ a8d5528 fix: session.sid AttributeError修正（独自server_session_id実装）
 
 #### Step 7.5.5: ドキュメント更新
 **担当者**: project-orchestrator
-- [ ] CLAUDE.md更新（v2.0機能追加）
-- [ ] README.md更新（使用方法セクション）
-- [ ] APIドキュメント更新（`.claude/02_backend/`）
-  - [ ] **Phase 7.3移管**: `01_backend_api_routes.md` にGPT分類API 4エンドポイント追記
-- [ ] テスト仕様書更新（`.claude/09_test/`）
+- [x] CLAUDE.md更新（v2.0機能追加）
+  - [x] ChatGPT自動分類機能の説明強化（CSRF保護、バリデーション追記）
+  - [x] APIエンドポイントにセキュリティ情報追記
+- [x] README.md更新（使用方法セクション）
+  - [x] 主な機能にChatGPT自動分類を追加
+  - [x] 環境変数一覧にOPENAI_API_KEY、GPT設定を追加
+  - [x] ChatGPT自動分類機能の使用方法を追加
+  - [x] ディレクトリ構成を更新（SQLite、gpt_classifier.py等）
+  - [x] 技術スタックにOpenAI API追加
+  - [x] セキュリティセクション強化
+  - [x] バージョン履歴にPhase 7 (v2.0)を追加
+- [x] APIドキュメント更新（`.claude/02_backend/`）
+  - [x] **Phase 7.3移管**: `01_backend_api_routes.md` にGPT分類API 4エンドポイント詳細追記
+  - [x] セキュリティ要件追記（CSRF保護、バリデーション）
+  - [x] エラーコード追加（GPT_VALIDATION_ERROR、CSRF_ERROR、SESSION_ERROR）
+- [x] テスト仕様書更新（`.claude/09_test/`）
+  - [x] ChatGPT自動分類機能テストセクション追加
+  - [x] Phase 7統合テスト結果追記（21件全合格）
 
 #### Step 7.5.6: .env読み込み機構の整備（NEW）
 **担当者**: backend-code-generator, project-compliance-tester

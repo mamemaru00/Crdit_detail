@@ -223,6 +223,7 @@ python app.py
    - SQLite一括登録（source='auto', priority=4）
    - エラー時のフォールバック処理（デフォルトカテゴリ: H列 雑貨費）
    - バッチ処理対応（最大50件/リクエスト）
+   - **セキュリティ**: CSRF保護、入力バリデーション（列番号C-V、カテゴリ名50文字制限）
 
 4. **スプレッドシート自動更新**
    - Googleスプレッドシートの該当する年・月・カテゴリに金額を自動加算
@@ -278,10 +279,10 @@ DELETE /mapping/delete/<id>     # マッピング削除（SQLite DELETE）
 
 ### ChatGPT Classification（v2.0～、NEW）
 ```
-POST /gpt/classify            # 未登録店舗をChatGPTで自動分類
+POST /gpt/classify            # 未登録店舗をChatGPTで自動分類（CSRF保護）
 GET  /gpt/classification      # ChatGPT分類結果確認画面を表示
-POST /gpt/confirm             # ユーザー確認後、SQLiteに一括登録
-POST /gpt/cancel              # ChatGPT分類をキャンセル
+POST /gpt/confirm             # ユーザー確認後、SQLiteに一括登録（CSRF保護、入力バリデーション）
+POST /gpt/cancel              # ChatGPT分類をキャンセル（CSRF保護）
 ```
 
 ### Downloads
@@ -500,3 +501,8 @@ web_search = true
 ### Contact & Support
 - プロジェクト管理: GitHub Issues
 - バージョン管理: Git / GitHub
+
+### MCPする場面
+- codex: バグ修正、テストする推論するときは積極的に使用する
+- playwright: 画面のテストをする際に仕様してください。
+- serena : 長期記憶しておきたいことが合った時に積極的に使用する
