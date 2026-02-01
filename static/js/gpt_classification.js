@@ -14,6 +14,9 @@
 $(document).ready(function() {
   'use strict';
 
+  // CSRFトークンをmeta要素から取得
+  const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
   // ==================== 機能1: カテゴリ変更→列番号の自動連動 ====================
 
   /**
@@ -93,6 +96,7 @@ $(document).ready(function() {
       url: '/gpt/confirm',
       method: 'POST',
       contentType: 'application/json',
+      headers: { 'X-CSRFToken': csrfToken },
       data: JSON.stringify({ classifications: classifications }),
       timeout: 30000, // 30秒タイムアウト
       success: function(response) {
@@ -150,6 +154,7 @@ $(document).ready(function() {
     $.ajax({
       url: '/gpt/cancel',
       method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
       timeout: 10000,
       success: function(response) {
         // 成功時はメイン画面にリダイレクト

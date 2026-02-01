@@ -89,6 +89,7 @@ project_root/
 - **google-auth**: 2.23+ (OAuth認証)
 - **gspread**: 6.x (Google Sheets連携)
 - **chardet**: 文字コード検出
+- **python-dotenv**: 1.0+ (環境変数管理、.env読み込み)
 - **SQLite**: 3.x (セッションストア、マッピングDB、WALモード対応)
 - **OpenAI API**: GPT-5 (未登録店舗の自動カテゴリ分類、v2.0～)
 
@@ -136,17 +137,53 @@ docker-compose down
 ブラウザで `http://localhost:5000` にアクセス
 
 ### Environment Variables
+
+**`.env`ファイルによる環境変数管理（推奨）**:
+プロジェクトルートに`.env`ファイルを作成し、以下の環境変数を設定します。`.env.example`をコピーして使用してください。
+
 ```bash
+# .envファイル例
+# OpenAI API設定（ChatGPT分類機能 v2.0）
+OPENAI_API_KEY=your-api-key-here
+GPT_MODEL=gpt-5
+GPT_MAX_TOKENS=2000
+GPT_TEMPERATURE=0.3
+GPT_BATCH_SIZE=50
+
+# Flask設定
+SECRET_KEY=your-secret-key-here
+
+# Google Sheets設定
+SPREADSHEET_ID=your-spreadsheet-id-here
+
+# アプリケーション設定
+DEFAULT_YEAR=2025
+LOG_LEVEL=INFO
+SESSION_TTL_SECONDS=1800
+CSV_MAX_FILE_SIZE=10485760  # 10MB（デフォルト）
+
 # CSVファイルサイズ上限設定（オプション）
-# Windows
-set CSV_MAX_FILE_SIZE=20971520  # 20MB
-
-# Mac/Linux
-export CSV_MAX_FILE_SIZE=20971520  # 20MB
-
 # デフォルト: 10MB (10485760 bytes)
 # テスト用: 20MB (20971520 bytes)
 # 本番推奨: 10MB（セキュリティ重視）
+```
+
+**注意事項**:
+- `.env`ファイルは`.gitignore`で管理対象外です（機密情報保護）
+- `.env.example`はテンプレートファイルで、Git管理対象です
+- `python-dotenv`ライブラリが自動的に`.env`を読み込みます
+- Docker環境では`docker-compose.yml`の`env_file`設定で`.env`を読み込みます
+
+**従来の環境変数設定（Mac/Linux）**:
+```bash
+# CSVファイルサイズ上限設定（オプション）
+export CSV_MAX_FILE_SIZE=20971520  # 20MB
+```
+
+**従来の環境変数設定（Windows）**:
+```bash
+# CSVファイルサイズ上限設定（オプション）
+set CSV_MAX_FILE_SIZE=20971520  # 20MB
 ```
 
 ### Python Development (venv)
@@ -186,6 +223,7 @@ python app.py
    - SQLite一括登録（source='auto', priority=4）
    - エラー時のフォールバック処理（デフォルトカテゴリ: H列 雑貨費）
    - バッチ処理対応（最大50件/リクエスト）
+   - **セキュリティ**: CSRF保護、入力バリデーション（列番号C-V、カテゴリ名50文字制限）
 
 4. **スプレッドシート自動更新**
    - Googleスプレッドシートの該当する年・月・カテゴリに金額を自動加算
@@ -241,10 +279,10 @@ DELETE /mapping/delete/<id>     # マッピング削除（SQLite DELETE）
 
 ### ChatGPT Classification（v2.0～、NEW）
 ```
-POST /gpt/classify            # 未登録店舗をChatGPTで自動分類
+POST /gpt/classify            # 未登録店舗をChatGPTで自動分類（CSRF保護）
 GET  /gpt/classification      # ChatGPT分類結果確認画面を表示
-POST /gpt/confirm             # ユーザー確認後、SQLiteに一括登録
-POST /gpt/cancel              # ChatGPT分類をキャンセル
+POST /gpt/confirm             # ユーザー確認後、SQLiteに一括登録（CSRF保護、入力バリデーション）
+POST /gpt/cancel              # ChatGPT分類をキャンセル（CSRF保護）
 ```
 
 ### Downloads
@@ -463,3 +501,8 @@ web_search = true
 ### Contact & Support
 - プロジェクト管理: GitHub Issues
 - バージョン管理: Git / GitHub
+
+### MCPする場面
+- codex: バグ修正、テストする推論するときは積極的に使用する
+- playwright: 画面のテストをする際に仕様してください。
+- serena : 長期記憶しておきたいことが合った時に積極的に使用する

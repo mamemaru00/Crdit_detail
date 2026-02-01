@@ -6,8 +6,9 @@
 
 - **CSVファイル自動取込**: イオンカード利用明細CSVを読み込み、データを解析
 - **カテゴリ自動振り分け**: 店舗名から「外食費」「日用品費」「交通費」などのカテゴリを自動判定
+- **ChatGPT自動分類（v2.0～）**: 未登録店舗をChatGPT APIで自動カテゴリ分類、ユーザー確認後にマッピング登録
 - **Googleスプレッドシート自動更新**: 年別シート・月別行・カテゴリ別列に金額を自動加算
-- **マッピング管理**: 店舗名とカテゴリの対応関係を簡単に登録・編集
+- **マッピング管理**: 店舗名とカテゴリの対応関係を簡単に登録・編集（SQLite管理）
 - **未登録店舗検出**: マッピング未登録の店舗を自動検知し、新規登録を促進
 
 ## システム要件
@@ -63,11 +64,16 @@ cp .env.example .env
 | `FLASK_ENV` | No | Flask実行環境（development/production）※Docker環境ではproduction推奨 | `development` |
 | `SECRET_KEY` | **Yes** | セッション暗号化キー（64文字以上） | なし |
 | `SPREADSHEET_ID` | **Yes** | GoogleスプレッドシートのID | なし |
+| `OPENAI_API_KEY` | **Yes (v2.0)** | OpenAI APIキー（ChatGPT分類機能に必要） | なし |
 | `DEFAULT_YEAR` | No | デフォルト処理年 | `2025` |
 | `LOG_LEVEL` | No | ログレベル（DEBUG/INFO/WARNING/ERROR） | `INFO` |
 | `CSV_MAX_FILE_SIZE` | No | CSVファイル最大サイズ（バイト） | `52428800` (50MB) |
 | `SESSION_TTL_SECONDS` | No | セッション有効期限（秒） | `1800` (30分) |
 | `SESSION_CLEANUP_INTERVAL_HOURS` | No | セッションクリーンアップ間隔（時間） | `6` (6時間) |
+| `GPT_MODEL` | No | ChatGPTモデル名（v2.0） | `gpt-4o-mini` |
+| `GPT_MAX_TOKENS` | No | ChatGPT最大トークン数（v2.0） | `2000` |
+| `GPT_TEMPERATURE` | No | ChatGPT温度パラメータ（v2.0） | `0.3` |
+| `GPT_BATCH_SIZE` | No | ChatGPTバッチサイズ（v2.0） | `50` |
 
 #### 設定例
 
@@ -85,9 +91,19 @@ SECRET_KEY=ここに生成した64文字の文字列を貼り付け
 # https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit
 SPREADSHEET_ID=ここにスプレッドシートIDを貼り付け
 
+# REQUIRED (v2.0): OpenAI APIキーを設定してください（ChatGPT分類機能に必要）
+# 取得方法: https://platform.openai.com/api-keys
+OPENAI_API_KEY=ここにOpenAI APIキーを貼り付け
+
 # アプリケーション設定（オプション）
 DEFAULT_YEAR=2025
 LOG_LEVEL=INFO
+
+# ChatGPT分類機能設定（オプション、v2.0）
+GPT_MODEL=gpt-4o-mini
+GPT_MAX_TOKENS=2000
+GPT_TEMPERATURE=0.3
+GPT_BATCH_SIZE=50
 ```
 
 ### 4. Google認証情報の配置
@@ -189,7 +205,31 @@ docker-compose down
 - **編集**: 各行の「編集」ボタンをクリックし、内容を修正後「保存」
 - **削除**: 各行の「削除」ボタンをクリック
 
-### 4. Googleスプレッドシートの確認
+### 4. ChatGPT自動分類機能の使用（v2.0～）
+
+#### 未登録店舗の自動分類
+
+処理実行時に未登録店舗が検出された場合、ChatGPTで自動分類できます。
+
+1. 処理結果画面で「未登録店舗」セクションを確認
+2. 「ChatGPTで自動分類」ボタンをクリック
+3. ChatGPTが店舗名から最適なカテゴリを推測し、分類結果を表示
+4. 分類結果確認画面で以下を確認・編集：
+   - **店舗名**: 未登録店舗の名前
+   - **カテゴリ**: ChatGPTが推測したカテゴリ（ドロップダウンで変更可能）
+   - **列番号**: カテゴリに対応するスプレッドシート列（C～V）
+   - **金額**: その店舗の合計金額
+   - **出現回数**: その店舗の明細件数
+5. 必要に応じてドロップダウンでカテゴリを修正
+6. 「確定」ボタンをクリックしてマッピングに登録
+7. 次回以降、同じ店舗は自動的に分類されます
+
+#### ChatGPT分類のエラー時の動作
+
+- ChatGPT API呼び出しに失敗した場合、すべての未登録店舗はデフォルトカテゴリ（H列: 雑貨費）に分類されます
+- エラー時もユーザー確認画面で手動修正が可能です
+
+### 5. Googleスプレッドシートの確認
 
 処理完了後、Googleスプレッドシートを確認してください。該当する年シート・月行・カテゴリ列に金額が自動加算されています。
 
@@ -281,26 +321,31 @@ project_root/
 ├── config/
 │   └── service_account.json   # Google認証情報（要配置、Git管理対象外）
 ├── data/
-│   ├── mapping.json           # カテゴリマッピング
+│   ├── mappings.db            # SQLiteマッピングDB（v2.0）
+│   ├── mapping.json           # カテゴリマッピング（v1.0、廃止予定）
 │   ├── backups/               # マッピングバックアップ
 │   └── sessions/              # セッションストア
+│       └── sessions.db        # SQLiteセッションDB
 ├── static/                     # フロントエンド静的ファイル
 │   ├── css/style.css
 │   └── js/
 │       ├── index.js
 │       ├── main.js
-│       └── mapping.js
+│       ├── mapping.js
+│       └── gpt_classification.js  # ChatGPT分類確認用JS（v2.0）
 ├── templates/                  # HTMLテンプレート
 │   ├── base.html
 │   ├── index.html
 │   ├── mapping.html
-│   └── result.html
+│   ├── result.html
+│   └── gpt_classification.html  # ChatGPT分類確認画面（v2.0）
 ├── modules/                    # バックエンドモジュール
 │   ├── csv_processor.py       # CSV処理
 │   ├── sheets_api.py          # Google Sheets API連携
-│   ├── mapping_manager.py     # マッピング管理
+│   ├── mapping_manager.py     # マッピング管理（SQLite対応）
 │   ├── category_logic.py      # カテゴリ振り分けロジック
-│   └── session_store.py       # セッションストア
+│   ├── session_store.py       # セッションストア（SQLite）
+│   └── gpt_classifier.py      # ChatGPT分類モジュール（v2.0）
 ├── tests/                      # テストコード
 └── logs/                       # アプリケーションログ
     └── app.log
@@ -308,15 +353,18 @@ project_root/
 
 ## 技術スタック
 
-- **バックエンド**: Python 3.12, Flask 3.0+, pandas, Google Sheets API
+- **バックエンド**: Python 3.12, Flask 3.0+, pandas, Google Sheets API, OpenAI API
 - **フロントエンド**: Bootstrap 5.3, JavaScript (ES6+), jQuery
 - **インフラ**: Docker, Docker Compose, Gunicorn
-- **データベース**: SQLite（セッションストア）
+- **データベース**: SQLite（セッションストア、マッピングDB）
 
 ## セキュリティ
 
 - サービスアカウント認証でGoogle Sheets APIにアクセス（ブラウザ認証不要）
+- OpenAI APIキー認証でChatGPT APIにアクセス（v2.0）
 - 認証情報（`service_account.json`, `.env`）はGit管理対象外
+- CSRF保護（全GPTエンドポイント）
+- 入力バリデーション（列番号C-V範囲チェック、カテゴリ名50文字制限）
 - CSVファイルは24時間後に自動クリーンアップ、またはセッションクリア時に削除
 - 非rootユーザーでコンテナ実行
 - セッションデータは30分でタイムアウト
@@ -331,6 +379,8 @@ project_root/
 
 ## バージョン履歴
 
+- **Phase 7 (v2.0)** (2026-01-31): ChatGPT自動分類機能実装完了、SQLiteマッピングDB移行、統合テスト21件全パス
+- **Phase 6** (2026-01): セッション管理・セキュリティ強化
 - **Phase 5** (2026-01-11): Docker化完了、Codex MCP評価A達成
 - **Phase 4** (2026-01-11): バックエンドテスト完了（241ケース、100%合格）
 - **Phase 3** (2025-01-08): フロントエンド実装完了

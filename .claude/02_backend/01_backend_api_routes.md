@@ -128,6 +128,8 @@ GET  /static/<path> # CSS/JSファイル
 
 ### POST /gpt/classify
 
+**セキュリティ**: CSRF保護、セッション検証
+
 #### リクエスト
 ```json
 {
@@ -137,6 +139,12 @@ GET  /static/<path> # CSS/JSファイル
   ]
 }
 ```
+
+**バリデーション**:
+- `unregistered_stores`: 必須、配列形式
+- `store`: 必須、文字列（最大255文字）
+- `amount`: 必須、数値
+- `count`: 必須、正の整数
 
 #### レスポンス（成功時）
 ```json
@@ -169,8 +177,14 @@ GET  /static/<path> # CSS/JSファイル
 
 ### GET /gpt/classification
 
+**セキュリティ**: セッション検証
+
 #### レスポンス
 ChatGPT分類結果確認画面（gpt_classification.html）を表示
+
+**セッションデータ要件**:
+- `gpt_classifications`: ChatGPT分類結果（必須）
+- `unregistered_stores_detail`: 未登録店舗詳細（必須）
 
 #### 画面内容
 - ChatGPT分類結果一覧テーブル
@@ -186,6 +200,8 @@ ChatGPT分類結果確認画面（gpt_classification.html）を表示
 
 ### POST /gpt/confirm
 
+**セキュリティ**: CSRF保護、セッション検証、入力バリデーション
+
 #### リクエスト
 ```json
 {
@@ -195,6 +211,12 @@ ChatGPT分類結果確認画面（gpt_classification.html）を表示
   ]
 }
 ```
+
+**バリデーション**:
+- `classifications`: 必須、配列形式
+- `store`: 必須、文字列（最大255文字）
+- `category`: 必須、文字列（最大50文字）
+- `column`: 必須、C～V列の範囲チェック（A1形式列番号）
 
 #### レスポンス（成功時）
 ```json
@@ -225,6 +247,11 @@ ChatGPT分類結果確認画面（gpt_classification.html）を表示
 
 ### POST /gpt/cancel
 
+**セキュリティ**: CSRF保護、セッション検証
+
+#### リクエスト
+リクエストボディなし（セッションクリアのみ）
+
 #### レスポンス
 ```json
 {
@@ -232,6 +259,11 @@ ChatGPT分類結果確認画面（gpt_classification.html）を表示
   "message": "Classification cancelled"
 }
 ```
+
+**処理内容**:
+- セッションから`gpt_classifications`を削除
+- セッションから`unregistered_stores_detail`を削除
+- リダイレクト先: `/result`
 
 ---
 
@@ -275,9 +307,12 @@ ChatGPT分類結果確認画面（gpt_classification.html）を表示
 |-------|------|--------|
 | CSV_PARSE_ERROR | CSV解析失敗 | ファイル形式・エンコーディングを確認 |
 | GPT_API_ERROR | ChatGPT API失敗 | デフォルトカテゴリで続行、APIキー確認 |
+| GPT_VALIDATION_ERROR | ChatGPT分類入力検証エラー | 列番号C-V範囲、カテゴリ名50文字以内を確認 |
 | DB_WRITE_ERROR | SQLite書き込み失敗 | データベースファイル権限確認 |
 | SHEETS_API_ERROR | Google Sheets API失敗 | 認証情報・権限確認 |
 | INVALID_REQUEST | 無効なリクエスト | リクエストパラメータ確認 |
+| CSRF_ERROR | CSRFトークン検証失敗 | ページ再読み込み、セッション確認 |
+| SESSION_ERROR | セッションデータ不正 | セッションタイムアウト、ページ再読み込み |
 
 ---
 
