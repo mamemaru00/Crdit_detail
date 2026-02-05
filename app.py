@@ -1082,19 +1082,23 @@ def gpt_confirm():
                 })
                 continue
 
-            result = mapping_manager.add_mapping(
-                store_name=store,
-                column=column,
-                priority=4,
-                source='auto'
-            )
-
-            if result['success']:
+            try:
+                # 辞書形式でadd_mapping()を呼び出し
+                result = mapping_manager.add_mapping({
+                    'pattern': store,
+                    'match_type': 'exact',  # ChatGPT分類は完全一致
+                    'category': category,
+                    'column': column,
+                    'priority': 4,
+                    'source': 'auto'
+                })
                 success_count += 1
-            else:
+                logger.info(f"マッピング登録成功: {store} -> {category} (列{column})")
+            except Exception as e:
+                logger.error(f"マッピング登録エラー: {store} - {str(e)}")
                 failed_mappings.append({
                     'store_name': store,
-                    'reason': result.get('message', '不明なエラー')
+                    'reason': str(e)
                 })
 
         # 失敗がある場合はエラーレスポンス
