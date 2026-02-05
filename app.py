@@ -1071,19 +1071,19 @@ def gpt_confirm():
         }
 
         for store_data in confirmed_data:
-            store_name = store_data.get('store_name')
+            store = store_data.get('store')
             category = store_data.get('category')
             column = category_to_column.get(category)
 
             if not column:
                 failed_mappings.append({
-                    'store_name': store_name,
+                    'store_name': store,
                     'reason': f'無効なカテゴリ: {category}'
                 })
                 continue
 
             result = mapping_manager.add_mapping(
-                store_name=store_name,
+                store_name=store,
                 column=column,
                 priority=4,
                 source='auto'
@@ -1093,7 +1093,7 @@ def gpt_confirm():
                 success_count += 1
             else:
                 failed_mappings.append({
-                    'store_name': store_name,
+                    'store_name': store,
                     'reason': result.get('message', '不明なエラー')
                 })
 
