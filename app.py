@@ -1070,31 +1070,35 @@ def gpt_confirm():
             'サブスク': 'T'
         }
 
-        for store_data in classifications:
-            store_name = store_data.get('store_name')
+        for store_data in confirmed_data:
+            store = store_data.get('store')
             category = store_data.get('category')
             column = category_to_column.get(category)
 
             if not column:
                 failed_mappings.append({
-                    'store_name': store_name,
+                    'store_name': store,
                     'reason': f'無効なカテゴリ: {category}'
                 })
                 continue
 
-            result = mapping_manager.add_mapping(
-                store_name=store_name,
-                column=column,
-                priority=4,
-                source='auto'
-            )
-
-            if result['success']:
+            try:
+                # 辞書形式でadd_mapping()を呼び出し
+                result = mapping_manager.add_mapping({
+                    'pattern': store,
+                    'match_type': 'exact',  # ChatGPT分類は完全一致
+                    'category': category,
+                    'column': column,
+                    'priority': 4,
+                    'source': 'auto'
+                })
                 success_count += 1
-            else:
+                logger.info(f"マッピング登録成功: {store} -> {category} (列{column})")
+            except Exception as e:
+                logger.error(f"マッピング登録エラー: {store} - {str(e)}")
                 failed_mappings.append({
-                    'store_name': store_name,
-                    'reason': result.get('message', '不明なエラー')
+                    'store_name': store,
+                    'reason': str(e)
                 })
 
         # 失敗がある場合はエラーレスポンス
