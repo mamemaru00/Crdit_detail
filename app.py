@@ -1014,7 +1014,7 @@ def gpt_confirm():
 
     Request JSON:
         {
-            'confirmed_data': [
+            'classifications': [
                 {
                     'store_name': str,
                     'category': str
@@ -1040,9 +1040,9 @@ def gpt_confirm():
     try:
         # バリデーション
         data = request.get_json()
-        confirmed_data = data.get('confirmed_data', [])
+        classifications = data.get('classifications', [])
 
-        if not confirmed_data:
+        if not classifications:
             logger.warning("確定データが空です")
             return jsonify({
                 'status': 'error',
@@ -1050,7 +1050,7 @@ def gpt_confirm():
             }), 400
 
         # Step 1: SQLiteマッピング登録
-        logger.info(f"マッピング登録開始: {len(confirmed_data)}件")
+        logger.info(f"マッピング登録開始: {len(classifications)}件")
         success_count = 0
         failed_mappings = []
 
