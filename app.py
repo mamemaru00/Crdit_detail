@@ -600,7 +600,7 @@ def process():
             # セッションクリア
             server_session_id = session.get('server_session_id')
             if server_session_id:
-                session_store.delete_session(server_session_id)
+                session_store.delete(server_session_id)
 
             logger.info("CSV処理完了")
 
@@ -1145,7 +1145,7 @@ def gpt_confirm():
         logger.info("Google Sheets更新完了")
 
         # セッションクリア
-        session_store.delete_session(server_session_id)
+        session_store.delete(server_session_id)
 
         # Step 3: トップ画面リダイレクト
         return jsonify({
@@ -1285,7 +1285,7 @@ def clear_session():
                 logger.info(f"アップロードファイルを削除: {file_path}")
 
             # セッションストアからデータ削除
-            session_store.delete_session(server_session_id)
+            session_store.delete(server_session_id)
             session.pop('server_session_id', None)
 
         logger.info("セッションクリア完了")
