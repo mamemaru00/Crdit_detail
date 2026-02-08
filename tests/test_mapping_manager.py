@@ -421,7 +421,7 @@ def test_backup_rotation(tmp_path):
     バックアップ10件保持ルール
     """
     mapping_file = tmp_path / "mapping.json"
-    mapping_file.write_text('{"version": "1.0", "mappings": [], "default": {"category": "支払額", "column": "B"}}')
+    mapping_file.write_text('{"version": "2.0", "mappings": []}')
 
     backup_dir = tmp_path / 'backups'
     backup_dir.mkdir(exist_ok=True)

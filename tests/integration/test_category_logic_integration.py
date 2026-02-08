@@ -30,7 +30,7 @@ from modules.category_logic import (
 @pytest.fixture
 def real_mapping_data():
     """実際のdata/mapping.jsonを読み込む"""
-    return load_mapping_data('data/mapping.json')
+    return load_mapping_data('data/mapping.json', use_sqlite=False)
 
 
 class TestRealMappingDataIntegration:
@@ -93,13 +93,13 @@ class TestMappingDataReload:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
             json.dump(mapping_data_1, f, ensure_ascii=False, indent=2)
             temp_file = f.name
 
         try:
             # マッピング1を読み込み
-            data_1 = load_mapping_data(temp_file)
+            data_1 = load_mapping_data(temp_file, use_sqlite=False)
             result_1 = determine_category("テスト店舗A", data_1)
             assert result_1['matched'] is True
             assert result_1['category'] == 'カテゴリA'
@@ -117,8 +117,7 @@ class TestMappingDataReload:
                         "priority": 1,
                         "note": None
                     }
-                ],
-                "default": {"category": "支払額", "column": "B"}
+                ]
             }
 
             # ファイルを上書き
@@ -126,7 +125,7 @@ class TestMappingDataReload:
                 json.dump(mapping_data_2, f, ensure_ascii=False, indent=2)
 
             # 再読込
-            data_2 = load_mapping_data(temp_file)
+            data_2 = load_mapping_data(temp_file, use_sqlite=False)
             result_2 = determine_category("テスト店舗A", data_2)
 
             # 変更が反映されていることを確認
@@ -173,8 +172,7 @@ class TestMultipleCategoriesMixedData:
                     "priority": 2,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         records = [
@@ -221,8 +219,7 @@ class TestAllRecordsUnregistered:
                     "priority": 1,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         records = [
@@ -266,8 +263,7 @@ class TestAllRecordsRegistered:
                     "priority": 3,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         records = [
