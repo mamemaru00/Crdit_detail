@@ -342,25 +342,32 @@ def get_column_index(column_letter: str) -> int:
     """
     列名（A, B, C...）から列番号（1, 2, 3...）を計算する
 
-    有効な列範囲: B～V（支払額～その他カテゴリ）
+    有効な列範囲: C～V（食材費～サブスク）
+    注意: B列は月列のため対象外
 
     Args:
-        column_letter: 列名（例: "B", "C", "V"）
+        column_letter: 列名（例: "C", "D", "V"）
 
     Returns:
-        int: 列番号（Bは2、Cは3、Vは22）
+        int: 列番号（Cは3、Dは4、Vは22）
 
     Raises:
-        ValueError: 列名が不正な場合（B～V以外、または複数文字）
+        ValueError: 列名が不正な場合（C～V以外、または複数文字）
+        ValueError: column_letterがNoneの場合
 
     Example:
-        >>> get_column_index("B")  # 支払額
-        2
-        >>> get_column_index("C")  # 外食費
+        >>> get_column_index("C")  # 食材費
         3
-        >>> get_column_index("V")  # その他カテゴリ
+        >>> get_column_index("D")  # 外食費
+        4
+        >>> get_column_index("V")  # サブスク
         22
     """
+    # None チェック
+    if column_letter is None:
+        logger.error(f"[COL:ERROR] 列名がNoneです")
+        raise ValueError(f"列名がNoneです")
+
     # 入力の正規化（大文字変換、strip）
     if not isinstance(column_letter, str):
         logger.error(f"[COL:ERROR] 列名は文字列である必要があります: {column_letter}")
@@ -373,10 +380,10 @@ def get_column_index(column_letter: str) -> int:
         logger.error(f"[COL:ERROR] 列名は1文字である必要があります: {column_letter}")
         raise ValueError(f"列名は1文字である必要があります: {column_letter}")
 
-    # 有効列範囲チェック（B～V）
-    if column_letter < 'B' or column_letter > 'V':
-        logger.error(f"[COL:ERROR] 列名が範囲外です: {column_letter}（有効範囲: B～V）")
-        raise ValueError(f"列名が範囲外です: {column_letter}（有効範囲: B～V）")
+    # 有効列範囲チェック（C～V）
+    if column_letter < 'C' or column_letter > 'V':
+        logger.error(f"[COL:ERROR] 列名が範囲外です: {column_letter}（有効範囲: C～V）")
+        raise ValueError(f"列名が範囲外です: {column_letter}（有効範囲: C～V）")
 
     # 列番号計算
     column_index = ord(column_letter) - ord('A') + 1

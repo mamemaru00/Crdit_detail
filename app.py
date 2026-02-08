@@ -85,9 +85,7 @@ logger.info(f"SessionStore初期化完了: {app.config['SESSION_DB_PATH']}")
 
 # ==================== 定数定義 ====================
 
-# デフォルトカテゴリと列（未登録店舗用）
-DEFAULT_CATEGORY = '支払額'
-DEFAULT_COLUMN = 'B'
+# デフォルト列・カテゴリ定義削除（Phase 7でChatGPT分類フローに移行）
 
 # ==================== ヘルパー関数 ====================
 
