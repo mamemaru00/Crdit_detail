@@ -21,7 +21,6 @@ class Config:
 
     # アプリケーション設定
     DEFAULT_YEAR = int(os.environ.get('DEFAULT_YEAR', '2025'))
-    DEFAULT_COLUMN = 'B'
     CSV_ENCODING = 'Shift_JIS'
 
     # セッションストア設定

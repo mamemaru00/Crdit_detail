@@ -17,10 +17,5 @@
       "column": "D",
       "priority": 1
     }
-  ],
-  "default": {
-    "category": "支払額",
-    "column": "B",
-    "note": "未分類はB列に振り分け"
-  }
+  ]
 }
