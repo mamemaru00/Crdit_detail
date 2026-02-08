@@ -134,7 +134,7 @@ def test_invalid_column():
         "pattern": "テスト",
         "match_type": "exact",
         "category": "テストカテゴリ",
-        "column": "Z",  # 不正な値（有効範囲はB～V）
+        "column": "Z",  # 不正な値（有効範囲はC～V）
         "priority": 1
     }
 

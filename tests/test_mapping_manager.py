@@ -355,7 +355,7 @@ def test_add_mapping_invalid_column(temp_mapping_file):
             'pattern': 'テスト',
             'match_type': 'exact',
             'category': 'カテゴリ',
-            'column': 'Z',  # 無効な列（B～Vの範囲外）
+            'column': 'Z',  # 無効な列（C～Vの範囲外）
             'priority': 1
         }
 

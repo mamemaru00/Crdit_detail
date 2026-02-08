@@ -41,7 +41,8 @@ class TestRealMappingDataIntegration:
         # マッピングデータが正常に読み込まれていることを確認
         assert 'version' in real_mapping_data
         assert 'mappings' in real_mapping_data
-        assert 'default' in real_mapping_data
+        # Phase 7: デフォルト設定は廃止（ChatGPT分類フローに統合）
+        # assert 'default' in real_mapping_data  # 削除済み
         assert len(real_mapping_data['mappings']) > 0
 
         # マッピングに登録されている店舗名で判定
@@ -76,9 +77,9 @@ class TestMappingDataReload:
 
     def test_mapping_data_reload_and_rejudge(self):
         """マッピングデータを変更して再読込・再判定する"""
-        # 一時マッピングデータ1を作成
+        # 一時マッピングデータ1を作成（Phase 7: default削除）
         mapping_data_1 = {
-            "version": "1.0",
+            "version": "2.0",
             "mappings": [
                 {
                     "id": 1,
@@ -89,8 +90,7 @@ class TestMappingDataReload:
                     "priority": 1,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -199,8 +199,8 @@ class TestMultipleCategoriesMixedData:
         assert result[2]['column'] == 'E'
         assert result[2]['matched'] is True
 
-        assert result[3]['category'] == '支払額'
-        assert result[3]['column'] == 'B'
+        assert result[3]['category'] is None
+        assert result[3]['column'] is None
         assert result[3]['matched'] is False
 
 
@@ -236,8 +236,8 @@ class TestAllRecordsUnregistered:
         assert len(result_batch) == 3
         for record in result_batch:
             assert record['matched'] is False
-            assert record['category'] == '支払額'
-            assert record['column'] == 'B'
+            assert record['category'] is None
+            assert record['column'] is None
 
         # 未登録店舗検出
         unregistered = detect_unregistered_stores(records, mapping_data)

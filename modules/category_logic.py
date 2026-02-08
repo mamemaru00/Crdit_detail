@@ -70,10 +70,11 @@ PRIORITY_EXACT = 1       # 完全一致の優先度
 PRIORITY_STARTSWITH = 2  # 前方一致の優先度
 PRIORITY_CONTAINS = 3    # 部分一致の優先度
 PRIORITY_KEYWORD = 4     # キーワード一致の優先度
+PRIORITY_DEFAULT = 5     # デフォルト優先度（内部フォールバック用）
 
 # 優先順位の範囲
 MIN_PRIORITY = 1
-MAX_PRIORITY = 4
+MAX_PRIORITY = 5  # PRIORITY_DEFAULTを含む
 
 # エラーメッセージでの型表記を上書きするマッピング
 TYPE_NAME_OVERRIDES = {

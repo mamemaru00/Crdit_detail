@@ -93,7 +93,7 @@
 - [x] 定数・型定義
   - [x] マッチタイプ定数（EXACT, STARTSWITH, CONTAINS, KEYWORD）
   - [x] デフォルト値定数（DEFAULT_COLUMN, DEFAULT_CATEGORY）
-  - [x] 有効列範囲定数（VALID_COLUMNS: B～V）
+  - [x] 有効列範囲定数（VALID_COLUMNS: C～V）
   - [x] TypedDict型定義（MappingEntry, MappingData, MatchResult）
 - [x] カスタム例外クラス
   - [x] CategoryLogicError（基底クラス）
@@ -255,7 +255,7 @@
   - 計算式：行番号 = 3 + 月番号
   - 例：8月 → 11行目
 - [x] カテゴリ列特定関数実装
-  - 列名（B～V）から列番号を取得
+  - 列名（C～V）から列番号を取得
 - [x] 既存値取得関数実装
   - セル読込
   - 空セルは0として扱う
@@ -557,7 +557,7 @@
   - [x] 店舗名パターン入力
   - [x] 一致方法選択（完全/前方/部分/キーワード）
   - [x] カテゴリ選択（21種類）
-  - [x] 列番号選択（B～V）
+  - [x] 列番号選択（C～V）
   - [x] 優先度選択（1～10）
   - [x] 登録・キャンセルボタン
 - [x] 編集モーダル実装

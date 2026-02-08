@@ -417,8 +417,8 @@ class TestRecordsWithoutStoreKey:
 
         for record in result:
             assert record['matched'] is False
-            assert record['category'] == '支払額'
-            assert record['column'] == 'B'
+            assert record['category'] is None
+            assert record['column'] is None
             assert record['pattern'] is None
             assert record['match_type'] is None
 
