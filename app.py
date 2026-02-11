@@ -293,6 +293,7 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
+@csrf.protect
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -394,6 +395,7 @@ def upload():
 
 
 @app.route('/preview', methods=['POST'])
+@csrf.protect
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -675,6 +677,7 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
+@csrf.protect
 def mapping_add():
     """
     新規マッピングを追加
@@ -890,6 +893,7 @@ def mapping_delete(mapping_id: int):
 # ==================== ChatGPT分類API ====================
 
 @app.route('/gpt/classify', methods=['POST'])
+@csrf.protect
 def gpt_classify():
     """
     未登録店舗をChatGPTで自動分類
@@ -1162,6 +1166,7 @@ def gpt_confirm():
 
 
 @app.route('/gpt/cancel', methods=['POST'])
+@csrf.protect
 def gpt_cancel():
     """
     ChatGPT分類をキャンセル
