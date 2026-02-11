@@ -91,7 +91,7 @@ GET  /static/<path> # CSS/JSファイル
 
 4. **ChatGPT自動分類** (`POST /gpt/classify`)
    - 未登録店舗リスト抽出（ユニーク化）
-   - カテゴリマスタ送信（B～V列定義）
+   - カテゴリマスタ送信（C～V列定義）
    - ChatGPT API 呼び出し（gpt_classifier.py）
    - JSON形式で分類結果を受信
    - エラー時: デフォルトカテゴリ（H列: 雑貨費）で続行

@@ -59,7 +59,7 @@ def test_batch_update_cells_integration():
     updates = []
     for i in range(1000):
         month = (i % 12) + 1
-        column_letter = chr(ord('B') + (i % 21))  # B～V列を循環
+        column_letter = chr(ord('C') + (i % 20))  # C～V列を循環
         updates.append({
             'month': month,
             'column_letter': column_letter,
