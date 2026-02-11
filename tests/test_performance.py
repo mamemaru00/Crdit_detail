@@ -194,11 +194,6 @@ def test_1000_records_end_to_end():
             ],
             'categories': {
                 '外食費': 'C'
-            },
-            'default': {
-                'category': '支払額',
-                'column': 'B',
-                'note': '未分類'
             }
         }
 
@@ -219,9 +214,12 @@ def test_1000_records_end_to_end():
             # 更新データ準備
             updates = []
             for record in enriched_data:
+                # category=None（未登録店舗）の場合はスキップ
+                if record.get('column') is None:
+                    continue
                 updates.append({
                     'month': record['month'],
-                    'column_letter': record.get('column', 'B'),
+                    'column_letter': record['column'],
                     'amount': float(record['amount']),
                     'add_mode': True
                 })
@@ -411,7 +409,7 @@ def test_batch_update_with_batch_get_integration():
     updates = []
     for i in range(1000):
         month = (i % 12) + 1
-        column_letter = chr(ord('B') + (i % 21))  # B～V列を循環
+        column_letter = chr(ord('C') + (i % 20))  # C～V列を循環
         updates.append({
             'month': month,
             'column_letter': column_letter,

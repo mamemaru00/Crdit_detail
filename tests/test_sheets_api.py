@@ -462,9 +462,10 @@ def test_get_column_index_valid_columns(column_letter, expected_index):
 
 
 @pytest.mark.parametrize("invalid_column,expected_message", [
-    ("A", "列名が範囲外です"),  # A列は範囲外（B～V）
-    ("W", "列名が範囲外です"),  # W列は範囲外（B～V）
-    ("Z", "列名が範囲外です"),  # Z列は範囲外（B～V）
+    ("A", "列名が範囲外です"),  # A列は範囲外（C～V）
+    ("B", "列名が範囲外です"),  # B列は月列のため範囲外（C～V）
+    ("W", "列名が範囲外です"),  # W列は範囲外（C～V）
+    ("Z", "列名が範囲外です"),  # Z列は範囲外（C～V）
     ("AA", "列名は1文字である必要があります")  # 2文字なので1文字チェックで弾かれる
 ])
 def test_get_column_index_invalid_range(invalid_column, expected_message):

@@ -51,11 +51,7 @@ def valid_mapping_data():
                 "priority": 1,
                 "note": "テスト用"
             }
-        ],
-        "default": {
-            "category": "支払額",
-            "column": "B"
-        }
+        ]
     }
 
 
@@ -66,15 +62,15 @@ class TestEmptyAndNullStoreNames:
         """空文字列の店舗名"""
         result = determine_category("", valid_mapping_data)
         assert result['matched'] is False
-        assert result['category'] == '支払額'
-        assert result['column'] == 'B'
+        assert result['category'] is None
+        assert result['column'] is None
 
     def test_whitespace_only_store_name(self, valid_mapping_data):
         """空白のみの店舗名"""
         result = determine_category("   ", valid_mapping_data)
         assert result['matched'] is False
-        assert result['category'] == '支払額'
-        assert result['column'] == 'B'
+        assert result['category'] is None
+        assert result['column'] is None
 
     def test_tab_only_store_name(self, valid_mapping_data):
         """タブのみの店舗名"""
@@ -104,8 +100,7 @@ class TestLongStoreName:
                     "priority": 2,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         result = determine_category(long_store_name, mapping_data_with_startswith)
@@ -136,8 +131,7 @@ class TestSpecialCharacters:
                     "priority": 1,
                     "note": None
                 }
-            ],
-            "default": {"category": "支払額", "column": "B"}
+            ]
         }
 
         result = determine_category(special_store_name, mapping_data)
@@ -151,31 +145,23 @@ class TestEmptyMappingsArray:
         """空のmappings配列は有効であることを確認"""
         data = {
             "version": "1.0",
-            "mappings": [],
-            "default": {
-                "category": "支払額",
-                "column": "B"
-            }
+            "mappings": []
         }
 
         # 検証が成功することを確認（例外が発生しない）
         validate_mapping_data(data)
 
     def test_empty_mappings_determine_category(self):
-        """空のmappings配列の場合、常にデフォルトカテゴリが返る"""
+        """空のmappings配列の場合、常に未登録として扱われる（Phase 7仕様）"""
         data = {
             "version": "1.0",
-            "mappings": [],
-            "default": {
-                "category": "支払額",
-                "column": "B"
-            }
+            "mappings": []
         }
 
         result = determine_category("どんな店舗名でも", data)
         assert result['matched'] is False
-        assert result['category'] == '支払額'
-        assert result['column'] == 'B'
+        assert result['category'] is None
+        assert result['column'] is None
 
 
 class TestInvalidIdValues:
@@ -257,13 +243,13 @@ class TestPriorityZero:
             "match_type": "exact",
             "category": "テストカテゴリ",
             "column": "C",
-            "priority": 0  # 範囲外（1～4が有効）
+            "priority": 0  # 範囲外（1～5が有効）
         }
 
         with pytest.raises(MappingValidationError) as exc_info:
             validate_mapping_entry(entry)
 
-        assert 'priorityは1～4の整数である必要があります' in exc_info.value.message
+        assert 'priorityは1～5の整数である必要があります' in exc_info.value.message
 
 
 class TestNoteFieldType:
@@ -337,11 +323,7 @@ class TestDuplicateIds:
                     "column": "D",
                     "priority": 1
                 }
-            ],
-            "default": {
-                "category": "支払額",
-                "column": "B"
-            }
+            ]
         }
 
         with pytest.raises(MappingValidationError) as exc_info:
@@ -417,8 +399,8 @@ class TestRecordsWithoutStoreKey:
 
         for record in result:
             assert record['matched'] is False
-            assert record['category'] == '支払額'
-            assert record['column'] == 'B'
+            assert record['category'] is None
+            assert record['column'] is None
             assert record['pattern'] is None
             assert record['match_type'] is None
 

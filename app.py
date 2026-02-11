@@ -85,9 +85,7 @@ logger.info(f"SessionStore初期化完了: {app.config['SESSION_DB_PATH']}")
 
 # ==================== 定数定義 ====================
 
-# デフォルトカテゴリと列（未登録店舗用）
-DEFAULT_CATEGORY = '支払額'
-DEFAULT_COLUMN = 'B'
+# デフォルト列・カテゴリ定義削除（Phase 7でChatGPT分類フローに移行）
 
 # ==================== ヘルパー関数 ====================
 
@@ -295,6 +293,7 @@ def result():
 # ==================== CSVアップロード機能 ====================
 
 @app.route('/upload', methods=['POST'])
+@csrf.protect
 def upload():
     """
     CSVファイルをアップロードして一時保存
@@ -396,6 +395,7 @@ def upload():
 
 
 @app.route('/preview', methods=['POST'])
+@csrf.protect
 def preview():
     """
     アップロードされたCSVファイルのプレビューを取得
@@ -677,6 +677,7 @@ def mapping_list():
 
 
 @app.route('/mapping/add', methods=['POST'])
+@csrf.protect
 def mapping_add():
     """
     新規マッピングを追加
@@ -892,6 +893,7 @@ def mapping_delete(mapping_id: int):
 # ==================== ChatGPT分類API ====================
 
 @app.route('/gpt/classify', methods=['POST'])
+@csrf.protect
 def gpt_classify():
     """
     未登録店舗をChatGPTで自動分類
@@ -1164,6 +1166,7 @@ def gpt_confirm():
 
 
 @app.route('/gpt/cancel', methods=['POST'])
+@csrf.protect
 def gpt_cancel():
     """
     ChatGPT分類をキャンセル

@@ -29,26 +29,23 @@ from modules.category_logic import (
 def test_normal_case():
     """正常系: data/mapping.jsonの読み込み・検証成功"""
     # マッピングデータ読み込み
-    data = load_mapping_data('data/mapping.json')
+    data = load_mapping_data('data/mapping.json', use_sqlite=False)
 
     assert 'version' in data
     assert 'mappings' in data
-    assert 'default' in data
+    # Phase 7: defaultフィールド削除（ChatGPT分類フローに統合）
+    # assert 'default' in data  # 削除済み
     assert isinstance(data['mappings'], list)
     assert len(data['mappings']) > 0
 
     # データ全体を検証（例外が発生しないことを確認）
     validate_mapping_data(data)
 
-    # デフォルト設定の確認
-    assert data['default']['category'] == '支払額'
-    assert data['default']['column'] == 'B'
-
 
 def test_file_not_found():
     """異常系: ファイルが存在しない場合にMappingLoadError"""
     with pytest.raises(MappingLoadError) as exc_info:
-        load_mapping_data('config/non_existent_file.json')
+        load_mapping_data('config/non_existent_file.json', use_sqlite=False)
 
     assert 'マッピングファイルが見つかりません' in exc_info.value.message
     assert 'path' in exc_info.value.details
@@ -57,13 +54,13 @@ def test_file_not_found():
 def test_invalid_json():
     """異常系: JSONが不正な場合にInvalidMappingFormatError"""
     # 一時ファイル作成
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
         f.write("{ invalid json content }")
         temp_file = f.name
 
     try:
         with pytest.raises(InvalidMappingFormatError) as exc_info:
-            load_mapping_data(temp_file)
+            load_mapping_data(temp_file, use_sqlite=False)
 
         assert 'JSONファイルの解析に失敗しました' in exc_info.value.message
     finally:
@@ -73,7 +70,7 @@ def test_invalid_json():
 
 def test_missing_fields():
     """異常系: 必須フィールドが不足している場合にMappingValidationError"""
-    # versionフィールドが不足しているデータ
+    # versionフィールドが不足しているデータ（Phase 7: default削除）
     invalid_data = {
         "mappings": [
             {
@@ -84,11 +81,7 @@ def test_missing_fields():
                 "column": "C",
                 "priority": 1
             }
-        ],
-        "default": {
-            "category": "支払額",
-            "column": "B"
-        }
+        ]
     }
 
     # 一時ファイル作成
@@ -98,7 +91,7 @@ def test_missing_fields():
 
     try:
         with pytest.raises(MappingValidationError) as exc_info:
-            load_mapping_data(temp_file)
+            load_mapping_data(temp_file, use_sqlite=False)
 
         assert '必須フィールドが不足しています' in exc_info.value.message
         assert 'version' in exc_info.value.message
@@ -134,7 +127,7 @@ def test_invalid_column():
         "pattern": "テスト",
         "match_type": "exact",
         "category": "テストカテゴリ",
-        "column": "Z",  # 不正な値（有効範囲はB～V）
+        "column": "Z",  # 不正な値（有効範囲はC～V）
         "priority": 1
     }
 
@@ -146,17 +139,17 @@ def test_invalid_column():
 
 def test_invalid_priority():
     """異常系: priorityが範囲外の場合にMappingValidationError"""
-    # 不正なpriorityを持つエントリ
+    # 不正なpriorityを持つエントリ（Phase 7: 有効範囲は1～5）
     invalid_entry = {
         "id": 1,
         "pattern": "テスト",
         "match_type": "exact",
         "category": "テストカテゴリ",
         "column": "C",
-        "priority": 5  # 不正な値（有効範囲は1～4）
+        "priority": 6  # 不正な値（有効範囲は1～5）
     }
 
     with pytest.raises(MappingValidationError) as exc_info:
         validate_mapping_entry(invalid_entry)
 
-    assert 'priorityは1～4の整数である必要があります' in exc_info.value.message
+    assert 'priorityは1～5の整数である必要があります' in exc_info.value.message
