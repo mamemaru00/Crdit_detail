@@ -85,9 +85,7 @@ logger.info(f"SessionStore初期化完了: {app.config['SESSION_DB_PATH']}")
 
 # ==================== 定数定義 ====================
 
-# デフォルトカテゴリと列（未登録店舗用）
-DEFAULT_CATEGORY = '支払額'
-DEFAULT_COLUMN = 'B'
+# デフォルト列・カテゴリ定義削除（Phase 7でChatGPT分類フローに移行）
 
 # ==================== ヘルパー関数 ====================
 
@@ -498,7 +496,7 @@ def process():
 
     Returns:
         JSON: {
-            'status': 'success',
+            'status': 'success' | 'needs_classification',
             'data': {
                 'summary': {
                     'total_amount': int,
@@ -562,116 +560,52 @@ def process():
 
         logger.info(f"処理対象: {len(csv_data)}件, スプレッドシートID: {spreadsheet_id}, 対象年: {target_year}")
 
-        # 4. マッピングデータ読み込み
-        mapping_data = category_logic.load_mapping_data(app.config['MAPPING_FILE'])
-
-        # 5. カテゴリ判定（バッチ処理）
-        enriched_data = category_logic.determine_categories_batch(csv_data, mapping_data)
-
-        # 6. 未登録店舗検出
-        unregistered_stores = category_logic.detect_unregistered_stores(csv_data, mapping_data)
+        # 4. カテゴリ判定
+        categorized_data, monthly_aggregation, unregistered_stores = category_logic.categorize_data(csv_data, mapping_manager)
 
         logger.info(f"カテゴリ判定完了: 未登録店舗 {len(unregistered_stores)}件")
 
-        # 7. Google Sheets認証・接続
-        client = sheets_api.authenticate(Path(app.config['SERVICE_ACCOUNT_FILE']))
-        spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
-        worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
+        # 5. セッションにspreadsheet_idとtarget_yearを保存（/gpt/confirmで使用）
+        session_data['spreadsheet_id'] = spreadsheet_id
+        session_data['target_year'] = target_year
+        session_store.save(get_server_session_id(), session_data)
 
-        logger.info(f"Googleスプレッドシート接続成功: {target_year}年シート")
+        # 6. 未登録店舗の有無で分岐
+        if unregistered_stores and len(unregistered_stores) > 0:
+            # パターンA/C: 未登録あり → Sheets更新を保留
+            logger.info(f"未登録店舗{len(unregistered_stores)}件検出、ChatGPT分類フローへ誘導")
 
-        # 8. 更新データの集計（月・カテゴリ別）
-        updates = []
-        category_summary = {}
-        month_summary = {}
-
-        for record in enriched_data:
-            month = record['month']
-            category = record.get('category', DEFAULT_CATEGORY)
-            column = record.get('column', DEFAULT_COLUMN)
-            amount = record['amount']
-
-            # バッチ更新用データ
-            updates.append({
-                'month': month,
-                'column_letter': column,
-                'amount': float(amount),
-                'add_mode': True  # 加算モード
-            })
-
-            # カテゴリ別サマリー
-            if category not in category_summary:
-                category_summary[category] = {
-                    'amount': 0,
-                    'count': 0,
-                    'column': column
-                }
-            category_summary[category]['amount'] += amount
-            category_summary[category]['count'] += 1
-
-            # 月別サマリー
-            if month not in month_summary:
-                month_summary[month] = {
-                    'amount': 0,
-                    'count': 0,
-                    'by_category': {}  # カテゴリ別の詳細を追加
-                }
-            month_summary[month]['amount'] += amount
-            month_summary[month]['count'] += 1
-
-            # 月別・カテゴリ別サマリー
-            if category not in month_summary[month]['by_category']:
-                month_summary[month]['by_category'][category] = {
-                    'amount': 0,
-                    'count': 0,
-                    'column': column
-                }
-            month_summary[month]['by_category'][category]['amount'] += amount
-            month_summary[month]['by_category'][category]['count'] += 1
-
-        # 9. バッチ更新実行
-        batch_result = sheets_api.batch_update_cells(worksheet, updates)
-
-        logger.info(f"セル更新完了: {batch_result['updated_cells']}セル")
-
-        # 10. 処理結果サマリー作成
-        total_amount = sum(r['amount'] for r in enriched_data)
-        total_count = len(enriched_data)
-        processing_time = (datetime.now() - start_time).total_seconds()
-
-        result_data = {
-            'summary': {
-                'total_amount': total_amount,
-                'total_count': total_count,
-                'by_category': category_summary,
-                'by_month': month_summary
-            },
-            'unregistered_stores': unregistered_stores,
-            'updated_cells': batch_result['updated_cells'],
-            'processing_time': processing_time,
-            'spreadsheet_id': spreadsheet_id,
-            'target_year': target_year
-        }
-
-        # 11. セッションストアに処理結果を保存
-        try:
-            session_data['process_result'] = result_data
+            # 未登録店舗情報をセッションに保存
+            session_data['unregistered_stores'] = unregistered_stores
             session_store.save(get_server_session_id(), session_data)
-        except Exception as e:
-            return handle_error(e, "処理結果の保存に失敗しました。再度お試しください")
 
-        logger.info(
-            f"CSV処理完了: "
-            f"{total_count}件, "
-            f"合計{total_amount:,}円, "
-            f"処理時間{processing_time:.2f}秒"
-        )
+            return jsonify({
+                'status': 'needs_classification',
+                'unregistered_count': len(unregistered_stores),
+                'unregistered_stores': unregistered_stores,
+                'message': f'{len(unregistered_stores)}件の未登録店舗があります'
+            }), 200
+        else:
+            # パターンB: 未登録なし → 即座にSheets更新
+            logger.info("未登録店舗なし、即座にGoogle Sheets更新")
 
-        return jsonify(create_response(
-            'success',
-            data=result_data,
-            message=f'{total_count}件の処理が完了しました'
-        ))
+            # Google Sheets更新処理
+            sheets_api.batch_update_cells(spreadsheet_id, target_year, monthly_aggregation)
+
+            logger.info("Google Sheets更新完了")
+
+            # セッションクリア
+            server_session_id = session.get('server_session_id')
+            if server_session_id:
+                session_store.delete(server_session_id)
+
+            logger.info("CSV処理完了")
+
+            return jsonify({
+                'status': 'success',
+                'redirect_url': '/?message=success',
+                'message': '取込処理が完了しました'
+            }), 200
 
     except category_logic.CategoryLogicError as e:
         logger.error(f"カテゴリ判定エラー: {e.message}", exc_info=True)
@@ -982,7 +916,7 @@ def gpt_classify():
     try:
         # 1. セッションストアから未登録店舗を取得
         session_data = session_store.load(get_server_session_id()) or {}
-        unregistered_stores = session_data.get('process_result', {}).get('unregistered_stores')
+        unregistered_stores = session_data.get('unregistered_stores')
 
         if not unregistered_stores or len(unregistered_stores) == 0:
             logger.warning("未登録店舗が存在しません")
@@ -1072,15 +1006,14 @@ def gpt_classification():
 @app.route('/gpt/confirm', methods=['POST'])
 def gpt_confirm():
     """
-    ユーザー確認後、ChatGPT分類結果をSQLiteに一括登録
+    ユーザー確認後、ChatGPT分類結果をSQLiteに一括登録し、Google Sheetsに反映
 
     Request JSON:
         {
             'classifications': [
                 {
-                    'store': str,
-                    'category': str,
-                    'column': str
+                    'store_name': str,
+                    'category': str
                 },
                 ...
             ]
@@ -1089,128 +1022,141 @@ def gpt_confirm():
     Returns:
         JSON: {
             'status': 'success',
-            'data': {
-                'registered_count': int,
-                'failed_count': int
-            },
+            'redirect_url': str,
+            'success_count': int,
             'message': str
         }
 
     Raises:
-        400: パラメータ不正
-        500: データベース登録エラー
+        400: パラメータ不正、セッションエラー
+        500: データベース登録エラー、Sheets更新エラー
     """
     logger.info("ChatGPT分類確定処理を開始")
 
     try:
-        # 1. リクエストデータ取得
-        request_data = request.get_json()
+        # バリデーション
+        data = request.get_json()
+        classifications = data.get('classifications', [])
 
-        if not request_data:
-            logger.warning("リクエストボディが空です")
-            return jsonify(create_response(
-                'error',
-                message='リクエストパラメータが不正です'
-            )), 400
+        if not classifications:
+            logger.warning("確定データが空です")
+            return jsonify({
+                'status': 'error',
+                'message': '確定データが空です'
+            }), 400
 
-        classifications = request_data.get('classifications', [])
+        # Step 1: SQLiteマッピング登録
+        logger.info(f"マッピング登録開始: {len(classifications)}件")
+        success_count = 0
+        failed_mappings = []
 
-        if not classifications or not isinstance(classifications, list):
-            logger.warning("classificationsが不正です")
-            return jsonify(create_response(
-                'error',
-                message='分類データが不正です'
-            )), 400
+        # カテゴリ→列番号変換テーブル（正しいマッピング）
+        category_to_column = {
+            '食材費': 'C',
+            '外食費': 'D',
+            '自己投資費': 'E',
+            '書籍代': 'F',
+            '家電': 'G',
+            '雑貨費': 'H',
+            '衣服・化粧費': 'I',
+            '娯楽': 'J',
+            '旅行費': 'K',
+            '通信費': 'O',
+            '個人娯楽': 'R',
+            'サブスク': 'T'
+        }
 
-        logger.info(f"SQLite登録対象: {len(classifications)}件")
+        for store_data in confirmed_data:
+            store = store_data.get('store')
+            category = store_data.get('category')
+            column = category_to_column.get(category)
 
-        # 2. 各エントリをSQLiteに登録
-        registered_count = 0
-        failed_count = 0
-        registered_stores = set()
+            if not column:
+                failed_mappings.append({
+                    'store_name': store,
+                    'reason': f'無効なカテゴリ: {category}'
+                })
+                continue
 
-        for entry in classifications:
             try:
-                store_name = entry.get('store')
-                category = entry.get('category')
-                column = entry.get('column')
-
-                if not all([store_name, category, column]):
-                    logger.warning(f"必須フィールド不足: {entry}")
-                    failed_count += 1
-                    continue
-
-                # 列番号の範囲チェック（C～V列のみ有効）
-                valid_columns = set('CDEFGHIJKLMNOPQRSTUV')
-                if column not in valid_columns:
-                    logger.warning(f"不正な列番号: {column}")
-                    failed_count += 1
-                    continue
-
-                # カテゴリ名の文字列長制限
-                if len(category) > 50:
-                    logger.warning(f"カテゴリ名が長すぎます: {len(category)}文字")
-                    failed_count += 1
-                    continue
-
-                # mapping_manager.add_mapping を使用して登録
-                # source='auto', priority=4 でChatGPT自動分類を明示
-                mapping_data = {
-                    'pattern': store_name,
-                    'match_type': 'keyword',
+                # 辞書形式でadd_mapping()を呼び出し
+                result = mapping_manager.add_mapping({
+                    'pattern': store,
+                    'match_type': 'exact',  # ChatGPT分類は完全一致
                     'category': category,
                     'column': column,
                     'priority': 4,
                     'source': 'auto'
-                }
-
-                mapping_manager.add_mapping(mapping_data)
-                registered_count += 1
-                registered_stores.add(store_name)
-
-                logger.debug(f"マッピング登録成功: {store_name} → {category} ({column}列)")
-
-            except mapping_manager.DuplicateMappingError:
-                # 重複エラーは警告のみ（既に登録済み）
-                logger.warning(f"マッピング重複（スキップ）: {store_name}")
-                failed_count += 1
-
+                })
+                success_count += 1
+                logger.info(f"マッピング登録成功: {store} -> {category} (列{column})")
             except Exception as e:
-                logger.error(f"マッピング登録エラー: {store_name} - {str(e)}")
-                failed_count += 1
+                logger.error(f"マッピング登録エラー: {store} - {str(e)}")
+                failed_mappings.append({
+                    'store_name': store,
+                    'reason': str(e)
+                })
 
-        # 3. セッション更新（gpt_classificationsクリア＋登録済み店舗をunregistered_storesから削除）
-        try:
-            session_data = session_store.load(get_server_session_id()) or {}
-            session_data.pop('gpt_classifications', None)
+        # 失敗がある場合はエラーレスポンス
+        if failed_mappings:
+            logger.warning(f"マッピング登録失敗: {len(failed_mappings)}件")
+            return jsonify({
+                'status': 'error',
+                'message': f'{len(failed_mappings)}件のマッピング登録に失敗しました',
+                'failed_mappings': failed_mappings
+            }), 400
 
-            # 登録済み店舗をunregistered_storesから削除
-            if registered_stores:
-                process_result = session_data.get('process_result', {})
-                unregistered = process_result.get('unregistered_stores', [])
-                process_result['unregistered_stores'] = [
-                    s for s in unregistered if s.get('store') not in registered_stores
-                ]
-                session_data['process_result'] = process_result
+        logger.info(f"マッピング登録完了: {success_count}件")
 
-            session_store.save(get_server_session_id(), session_data)
-        except Exception as e:
-            logger.warning(f"セッション更新中にエラー: {str(e)}")
+        # Step 2: Google Sheets更新
+        server_session_id = session.get('server_session_id')
+        if not server_session_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'セッションが無効です'
+            }), 400
 
-        logger.info(f"ChatGPT分類確定完了: 登録={registered_count}件, 失敗={failed_count}件")
+        session_data = session_store.load(server_session_id)
+        if not session_data:
+            return jsonify({
+                'status': 'error',
+                'message': 'セッションデータが見つかりません'
+            }), 400
 
-        # 4. 成功レスポンス
-        return jsonify(create_response(
-            'success',
-            data={
-                'registered_count': registered_count,
-                'failed_count': failed_count
-            },
-            message=f'{registered_count}件のマッピングを登録しました'
-        ))
+        csv_data = session_data.get('csv_data', [])
+        target_year = session_data.get('target_year', datetime.now().year)
+        spreadsheet_id = os.getenv('SPREADSHEET_ID')
+
+        logger.info("再カテゴリ判定開始（新規マッピングを反映）")
+
+        # 再度カテゴリ判定（新規マッピングを反映）
+        from modules.category_logic import categorize_data
+        categorized_data, monthly_aggregation, _ = categorize_data(csv_data, mapping_manager)
+
+        logger.info("Google Sheets更新開始")
+
+        # Sheets更新
+        sheets_api.batch_update_cells(spreadsheet_id, target_year, monthly_aggregation)
+
+        logger.info("Google Sheets更新完了")
+
+        # セッションクリア
+        session_store.delete(server_session_id)
+
+        # Step 3: トップ画面リダイレクト
+        return jsonify({
+            'status': 'success',
+            'redirect_url': '/?message=success',
+            'success_count': success_count,
+            'message': '取込処理が完了しました'
+        }), 200
 
     except Exception as e:
-        return handle_error(e, "ChatGPT分類の確定処理に失敗しました")
+        logger.error(f'/gpt/confirm エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': '処理中にエラーが発生しました'
+        }), 500
 
 
 @app.route('/gpt/cancel', methods=['POST'])
@@ -1307,7 +1253,6 @@ def request_entity_too_large(error):
 
 
 @app.route('/clear_session', methods=['POST'])
-@csrf.exempt  # TODO: 全フロントエンド実装完了後にCSRF保護を有効化
 def clear_session():
     """
     セッションをクリアする
@@ -1324,29 +1269,33 @@ def clear_session():
 
     try:
         # セッションストアからファイルパス取得
-        session_data = session_store.load(get_server_session_id()) or {}
-        file_path = session_data.get('uploaded_file_path')
+        server_session_id = session.get('server_session_id')
+        if server_session_id:
+            session_data = session_store.load(server_session_id) or {}
+            file_path = session_data.get('uploaded_file_path')
 
-        # アップロードファイルの削除
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
-            logger.info(f"アップロードファイルを削除: {file_path}")
+            # アップロードファイルの削除
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"アップロードファイルを削除: {file_path}")
 
-        # セッションストアからデータ削除
-        session_store.delete(get_server_session_id())
-
-        # Cookieセッションもクリア
-        session.clear()
+            # セッションストアからデータ削除
+            session_store.delete(server_session_id)
+            session.pop('server_session_id', None)
 
         logger.info("セッションクリア完了")
 
-        return jsonify(create_response(
-            'success',
-            message='セッションをクリアしました'
-        ))
+        return jsonify({
+            'status': 'success',
+            'message': 'セッションをクリアしました'
+        }), 200
 
     except Exception as e:
-        return handle_error(e, "セッションのクリアに失敗しました")
+        logger.error(f'/clear_session エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': 'セッションクリアに失敗しました'
+        }), 500
 
 
 @app.route('/download/log', methods=['GET'])

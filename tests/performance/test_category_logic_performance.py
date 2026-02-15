@@ -73,8 +73,7 @@ def sample_mapping_data():
                 "priority": 3,
                 "note": None
             }
-        ],
-        "default": {"category": "支払額", "column": "B"}
+        ]
     }
 
 

@@ -102,10 +102,26 @@ $(document).ready(function() {
       success: function(response) {
         if (response.status === 'success') {
           alert(response.message || '分類結果をマッピングに登録しました。');
-          window.location.href = '/';
-        } else {
-          // サーバーエラー（status: 'error'）
-          alert('エラー: ' + (response.message || '登録に失敗しました'));
+
+          // サーバーのリダイレクトURLを使用
+          if (response.redirect_url) {
+            window.location.href = response.redirect_url;
+          } else {
+            // フォールバック
+            window.location.href = '/?message=success';
+          }
+        } else if (response.status === 'error') {
+          // エラー詳細を表示
+          let errorMessage = response.message || 'マッピング登録に失敗しました';
+
+          if (response.failed_mappings && response.failed_mappings.length > 0) {
+            errorMessage += '\n\n失敗した店舗:\n';
+            response.failed_mappings.forEach(function(item) {
+              errorMessage += `- ${item.store_name}: ${item.reason}\n`;
+            });
+          }
+
+          alert('エラー: ' + errorMessage);
           $confirmBtn.prop('disabled', false)
                      .html('<i class="bi bi-check-circle"></i> 確定して登録');
         }

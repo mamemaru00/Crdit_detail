@@ -24,7 +24,7 @@
 | pattern | TEXT | - | NULL | 店舗名パターン（部分一致検索用） | "ユシンヤ" |
 | match_type | TEXT | ○ | 'contains' | 一致方法 | "contains" |
 | category | TEXT | ○ | - | カテゴリ名 | "外食費" |
-| column | TEXT | ○ | - | 列番号（B～V） | "D" |
+| column | TEXT | ○ | - | 列番号（C～V） | "D" |
 | priority | INTEGER | ○ | 4 | 優先順位（1=最高、4=ChatGPT自動分類） | 1 |
 | source | TEXT | ○ | 'manual' | データソース | "auto" / "manual" |
 | created_at | TIMESTAMP | ○ | CURRENT_TIMESTAMP | 登録日時 | "2025-08-15 10:30:00" |

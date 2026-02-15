@@ -209,10 +209,107 @@
 
       const result = await response.json();
 
-      // 結果表示更新
-      updateResultDisplay(result.data);
+      window.hideProgress();
 
-      // 結果セクション表示
+      // パターンA/C: 未登録店舗あり
+      if (result.status === 'needs_classification') {
+        const unregisteredCount = result.unregistered_count || 0;
+
+        // ユーザー確認ダイアログ
+        const userConfirmed = confirm(
+          `未登録店舗が${unregisteredCount}件あります。\n` +
+          'ChatGPTで自動分類しますか？\n\n' +
+          '※OpenAI APIキーが設定されている必要があります'
+        );
+
+        if (userConfirmed) {
+          // パターンA: ChatGPT分類実行
+          await executeChatGPTClassification();
+        } else {
+          // パターンC: ユーザー拒否
+          showWarning(
+            '未登録店舗があります。マッピング管理画面で登録してください。',
+            result.unregistered_stores
+          );
+        }
+      }
+      // パターンB: 未登録0件、即座に成功
+      else if (result.status === 'success') {
+        if (result.redirect_url) {
+          window.location.href = result.redirect_url;
+        } else {
+          window.showToast('#successToast', '取込処理が正常に完了しました');
+        }
+      }
+      // エラーハンドリング
+      else if (result.status === 'error') {
+        window.showToast('#errorToast', result.message || '処理中にエラーが発生しました');
+      }
+
+    } catch (error) {
+      window.hideProgress();
+      console.error('Execute error:', error);
+      window.showToast('#errorToast', error.message);
+    }
+  }
+
+  // =========================================
+  // ChatGPT分類実行
+  // =========================================
+  /**
+   * ChatGPT分類を実行し、確認画面にリダイレクト
+   */
+  async function executeChatGPTClassification() {
+    try {
+      // ローディング表示
+      window.showProgress();
+
+      const response = await fetch('/gpt/classify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': window.getCsrfToken()
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'ChatGPT分類に失敗しました');
+      }
+
+      const result = await response.json();
+
+      window.hideProgress();
+
+      if (result.status === 'success') {
+        // 確認画面へリダイレクト
+        window.location.href = '/gpt/classification';
+      } else {
+        window.showToast('#errorToast', result.message || 'ChatGPT分類に失敗しました');
+      }
+
+    } catch (error) {
+      window.hideProgress();
+      console.error('executeChatGPTClassification error:', error);
+      window.showToast('#errorToast', 'ChatGPT分類中にエラーが発生しました: ' + error.message);
+    }
+  }
+
+  // =========================================
+  // 警告表示（パターンC用）
+  // =========================================
+  /**
+   * 未登録店舗がある場合の警告表示
+   * @param {string} message - 警告メッセージ
+   * @param {Array} unregisteredStores - 未登録店舗リスト
+   */
+  function showWarning(message, unregisteredStores) {
+    // Toast表示
+    window.showToast('#errorToast', message);
+
+    // 未登録店舗リスト表示（resultArea内）
+    if (unregisteredStores && unregisteredStores.length > 0) {
+      displayUnregisteredStores(unregisteredStores);
       showSection('resultArea');
 
       // スムーズスクロール
@@ -220,14 +317,33 @@
         behavior: 'smooth',
         block: 'start'
       });
+    }
+  }
 
-      window.showToast('#successToast', '取込処理が完了しました');
+  // =========================================
+  // 未登録店舗リスト表示
+  // =========================================
+  /**
+   * 未登録店舗リストを結果エリアに表示
+   * @param {Array} unregisteredStores - 未登録店舗リスト
+   */
+  function displayUnregisteredStores(unregisteredStores) {
+    const unregisteredList = document.getElementById('unregisteredStoresList');
+    if (!unregisteredList) return;
 
-    } catch (error) {
-      console.error('Execute error:', error);
-      window.showToast('#errorToast', error.message);
-    } finally {
-      window.hideProgress();
+    unregisteredList.innerHTML = '';
+
+    unregisteredStores.forEach(function(store) {
+      const li = document.createElement('li');
+      li.className = 'mb-1';
+      li.textContent = `${escapeHtml(store.store)} (${formatCurrency(store.total_amount)}, ${store.count}件)`;
+      unregisteredList.appendChild(li);
+    });
+
+    // 未登録店舗セクション表示
+    const unregisteredSection = document.getElementById('unregisteredStoresSection');
+    if (unregisteredSection) {
+      unregisteredSection.classList.remove('d-none');
     }
   }
 

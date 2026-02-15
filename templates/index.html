@@ -3,6 +3,19 @@
 {% block title %}CSV取込 - {{ super() }}{% endblock %}
 
 {% block content %}
+<!-- トースト表示用コンテナ -->
+<div id="toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 11"></div>
+
+<!-- ローディングオーバーレイ -->
+<div id="loading-overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex align-items-center justify-content-center" style="z-index: 9999">
+  <div class="text-center text-white">
+    <div class="spinner-border mb-3" role="status">
+      <span class="visually-hidden">読み込み中...</span>
+    </div>
+    <div id="loading-message">処理中...</div>
+  </div>
+</div>
+
 <div class="container py-4">
   <h1 class="mb-4">
     <i class="bi bi-file-earmark-arrow-up"></i> CSV取込メイン画面
@@ -255,7 +268,7 @@
         <div class="alert alert-warning" role="status">
           <p class="mb-2">
             以下の店舗はマッピングに登録されていません。
-            デフォルト列（B列: 支払額）に振り分けました。
+            ChatGPT分類フローで自動分類するか、マッピング管理画面で手動登録してください。
           </p>
           <ul id="unregisteredStoresList" class="mb-2">
             <!-- JavaScriptで動的生成 -->
@@ -283,4 +296,38 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+<script>
+// URLパラメータチェック（ページ読み込み時）
+document.addEventListener('DOMContentLoaded', function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const message = urlParams.get('message');
+
+  if (message === 'success') {
+    // 成功メッセージ表示（Bootstrap Toast）
+    const toastContainer = document.getElementById('toast-container');
+    const toastHtml = `
+      <div class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            取込処理が正常に完了しました
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    `;
+
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = toastContainer.querySelector('.toast:last-child');
+    const toast = new bootstrap.Toast(toastElement, {
+      autohide: true,
+      delay: 5000
+    });
+    toast.show();
+
+    // URLパラメータを削除（リロード時の重複防止）
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+});
+</script>
 {% endblock %}

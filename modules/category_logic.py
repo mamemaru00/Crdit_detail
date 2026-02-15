@@ -56,13 +56,11 @@ VALID_MATCH_TYPES = [
     MATCH_TYPE_KEYWORD
 ]
 
-# デフォルト列
-DEFAULT_COLUMN = 'B'
-DEFAULT_CATEGORY = '支払額'
+# デフォルト列（削除済み - Phase 7でChatGPT分類フローに移行）
 
-# 列範囲(B～V列、21要素)
+# 列範囲(C～V列、20要素 - B列は月列のため除外)
 VALID_COLUMNS = [
-    'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+    'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
     'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
     'T', 'U', 'V'
 ]
@@ -72,11 +70,11 @@ PRIORITY_EXACT = 1       # 完全一致の優先度
 PRIORITY_STARTSWITH = 2  # 前方一致の優先度
 PRIORITY_CONTAINS = 3    # 部分一致の優先度
 PRIORITY_KEYWORD = 4     # キーワード一致の優先度
-PRIORITY_DEFAULT = 999   # デフォルト優先度（マッチしない場合）
+PRIORITY_DEFAULT = 5     # デフォルト優先度（内部フォールバック用）
 
 # 優先順位の範囲
 MIN_PRIORITY = 1
-MAX_PRIORITY = 4
+MAX_PRIORITY = 5  # PRIORITY_DEFAULTを含む
 
 # エラーメッセージでの型表記を上書きするマッピング
 TYPE_NAME_OVERRIDES = {
@@ -94,7 +92,7 @@ class MappingEntry(TypedDict):
         pattern (str): 店舗名パターン
         match_type (str): 一致方法(exact, startswith, contains, keyword)
         category (str): カテゴリ名
-        column (str): 列番号(B～V)
+        column (str): 列番号(C～V)
         priority (int): 優先順位(1=最高)
         note (Optional[str]): 備考
     """
@@ -113,11 +111,12 @@ class MappingData(TypedDict):
     Attributes:
         version (str): データバージョン
         mappings (List[MappingEntry]): マッピングエントリリスト
-        default (dict): デフォルト設定(category, column)
+
+    Note:
+        Phase 7でdefaultフィールドを削除（ChatGPT分類フローに移行）
     """
     version: str
     mappings: List[MappingEntry]
-    default: dict
 
 
 class MatchResult(TypedDict):
@@ -126,7 +125,7 @@ class MatchResult(TypedDict):
     Attributes:
         matched (bool): マッチしたかどうか
         category (str): カテゴリ名
-        column (str): 列番号(B～V)
+        column (str): 列番号(C～V)
         pattern (Optional[str]): マッチしたパターン
         match_type (Optional[str]): マッチタイプ
     """
@@ -229,15 +228,10 @@ def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH, use_sqlite: bool
                 from modules import mapping_manager
                 mappings = mapping_manager.get_all_mappings(use_sqlite=True)
 
-                # MappingData形式に変換
+                # MappingData形式に変換（Phase 7: defaultフィールド削除）
                 return {
                     'version': '2.0',
-                    'mappings': mappings,
-                    'default': {
-                        'category': '支払額',
-                        'column': 'B',
-                        'note': '未分類はB列に振り分け'
-                    }
+                    'mappings': mappings
                 }
             except Exception as e:
                 # SQLiteからの読み込みに失敗した場合はJSONにフォールバック
@@ -282,8 +276,8 @@ def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH, use_sqlite: bool
             details={'path': str(file_path), 'error': str(e)}
         )
 
-    # 必須フィールドの検証
-    required_fields = ['version', 'mappings', 'default']
+    # 必須フィールドの検証（Phase 7: defaultフィールド削除）
+    required_fields = ['version', 'mappings']
     missing_fields = [field for field in required_fields if field not in data]
 
     if missing_fields:
@@ -299,12 +293,7 @@ def load_mapping_data(mapping_path: str = DEFAULT_MAPPING_PATH, use_sqlite: bool
             details={'type': type(data.get('mappings')).__name__, 'path': str(file_path)}
         )
 
-    # defaultが辞書であることを確認
-    if not isinstance(data.get('default'), dict):
-        raise InvalidMappingFormatError(
-            "defaultフィールドは辞書形式である必要があります",
-            details={'type': type(data.get('default')).__name__, 'path': str(file_path)}
-        )
+    # Phase 7: defaultフィールドの検証を削除（ChatGPT分類フローに移行）
 
     return data
 
@@ -407,7 +396,7 @@ def validate_mapping_entry(entry: MappingEntry) -> None:
     _validate_field_in_choices(entry, 'match_type', VALID_MATCH_TYPES)
 
     # columnの検証
-    _validate_field_in_choices(entry, 'column', VALID_COLUMNS, error_hint="B～V")
+    _validate_field_in_choices(entry, 'column', VALID_COLUMNS, error_hint="C～V")
 
     # priorityの検証（範囲チェック）
     priority = entry.get('priority')
@@ -475,20 +464,7 @@ def validate_mapping_data(data: MappingData) -> None:
     # ID重複チェック
     _validate_duplicate_ids(mappings)
 
-    # defaultフィールドの検証
-    _validate_required_fields(data, ['default'], context="マッピングデータ")
-    if not isinstance(data.get('default'), dict):
-        raise InvalidMappingFormatError(
-            "defaultフィールドは辞書形式である必要があります",
-            details={'type': type(data.get('default')).__name__}
-        )
-
-    # defaultフィールドの必須キー確認
-    default_data = data.get('default', {})
-    _validate_required_fields(default_data, ['category', 'column'], context="defaultフィールド")
-
-    # defaultのcolumnが有効な値か確認
-    _validate_field_in_choices(default_data, 'column', VALID_COLUMNS, error_hint="B～V")
+    # Phase 7: defaultフィールドの検証を削除（ChatGPT分類フローに移行）
 
 
 def _is_valid_match_input(store_name: str, pattern: str) -> bool:
@@ -764,12 +740,11 @@ def determine_category(
             match_type=best_match['match_type']
         )
 
-    # 3. マッチしなかった場合（デフォルト列）
-    default = mapping_data['default']
+    # 3. マッチしなかった場合（未登録として扱う - Phase 7仕様）
     return MatchResult(
         matched=False,
-        category=default['category'],
-        column=default['column'],
+        category=None,  # カテゴリなし
+        column=None,    # 列なし
         pattern=None,
         match_type=None
     )
@@ -897,11 +872,10 @@ def _enrich_record_with_category(record: Dict, mapping_data: MappingData) -> Dic
             'match_type': match_result.get('match_type')
         })
     else:
-        # storeフィールドがない場合はデフォルト値を設定
-        default = mapping_data['default']
+        # storeフィールドがない場合は未登録として扱う（Phase 7仕様）
         enriched_record.update({
-            'category': default['category'],
-            'column': default['column'],
+            'category': None,
+            'column': None,
             'matched': False,
             'pattern': None,
             'match_type': None
@@ -946,7 +920,7 @@ def determine_categories_batch(
         >>> results[0]['matched']
         True
         >>> results[1]['category']
-        '支払額'
+        None
         >>> results[1]['matched']
         False
     """
@@ -956,3 +930,94 @@ def determine_categories_batch(
 
     # 各レコードにカテゴリ情報を付与
     return [_enrich_record_with_category(record, mapping_data) for record in records]
+
+
+def categorize_data(
+    csv_data: List[Dict],
+    mapping_manager
+) -> tuple[List[Dict], Dict, List[Dict]]:
+    """
+    CSVデータをカテゴリ判定し、月別集計と未登録店舗を抽出
+
+    Phase 7仕様:
+    - 未登録店舗（matched=False）は monthly_aggregation に含めない
+    - 未登録店舗は unregistered_stores にのみ追加
+    - 登録済み店舗のみ月別集計対象
+
+    Args:
+        csv_data (List[Dict]): CSV明細データ
+        mapping_manager: マッピングマネージャーインスタンス
+
+    Returns:
+        tuple[List[Dict], Dict, List[Dict]]:
+            - categorized_data: カテゴリ判定済みデータ（全件）
+            - monthly_aggregation: 月別集計データ（登録済みのみ）
+                {
+                    月番号(int): {
+                        列記号(str): 金額(float)
+                    }
+                }
+            - unregistered_stores: 未登録店舗リスト
+                [
+                    {
+                        'store': str,
+                        'count': int,
+                        'total_amount': int
+                    }
+                ]
+
+    Example:
+        >>> csv_data = [
+        ...     {'date': '2025/08/15', 'store': 'ユシンヤ', 'amount': 5780},
+        ...     {'date': '2025/08/16', 'store': '未登録店舗', 'amount': 1000}
+        ... ]
+        >>> categorized_data, monthly_agg, unregistered = categorize_data(csv_data, mapping_manager)
+        >>> len(categorized_data)
+        2
+        >>> 8 in monthly_agg  # 登録済み店舗のみ
+        True
+        >>> len(unregistered)
+        1
+    """
+    # 1. マッピングデータ取得
+    mapping_data = load_mapping_data(use_sqlite=True)
+
+    # 2. カテゴリ一括判定
+    categorized_data = determine_categories_batch(csv_data, mapping_data)
+
+    # 3. 未登録店舗検出
+    unregistered_stores = detect_unregistered_stores(csv_data, mapping_data)
+
+    # 4. 月別集計（登録済み店舗のみ）
+    monthly_aggregation = {}
+
+    for record in categorized_data:
+        # 未登録店舗（matched=False, category=None, column=None）はスキップ
+        if not record.get('matched', False):
+            continue
+
+        # category, column が None の場合もスキップ
+        if record.get('category') is None or record.get('column') is None:
+            continue
+
+        # 日付から月番号を抽出（'2025/08/15' → 8）
+        date_str = record.get('date', '')
+        try:
+            month = int(date_str.split('/')[1])
+        except (IndexError, ValueError):
+            # 日付形式が不正な場合はスキップ
+            continue
+
+        # 月別集計に追加
+        if month not in monthly_aggregation:
+            monthly_aggregation[month] = {}
+
+        column = record['column']
+        amount = record.get('amount', 0)
+
+        if column not in monthly_aggregation[month]:
+            monthly_aggregation[month][column] = 0.0
+
+        monthly_aggregation[month][column] += amount
+
+    return categorized_data, monthly_aggregation, unregistered_stores

@@ -93,7 +93,7 @@
 - [x] 定数・型定義
   - [x] マッチタイプ定数（EXACT, STARTSWITH, CONTAINS, KEYWORD）
   - [x] デフォルト値定数（DEFAULT_COLUMN, DEFAULT_CATEGORY）
-  - [x] 有効列範囲定数（VALID_COLUMNS: B～V）
+  - [x] 有効列範囲定数（VALID_COLUMNS: C～V）
   - [x] TypedDict型定義（MappingEntry, MappingData, MatchResult）
 - [x] カスタム例外クラス
   - [x] CategoryLogicError（基底クラス）
@@ -255,7 +255,7 @@
   - 計算式：行番号 = 3 + 月番号
   - 例：8月 → 11行目
 - [x] カテゴリ列特定関数実装
-  - 列名（B～V）から列番号を取得
+  - 列名（C～V）から列番号を取得
 - [x] 既存値取得関数実装
   - セル読込
   - 空セルは0として扱う
@@ -557,7 +557,7 @@
   - [x] 店舗名パターン入力
   - [x] 一致方法選択（完全/前方/部分/キーワード）
   - [x] カテゴリ選択（21種類）
-  - [x] 列番号選択（B～V）
+  - [x] 列番号選択（C～V）
   - [x] 優先度選択（1～10）
   - [x] 登録・キャンセルボタン
 - [x] 編集モーダル実装
@@ -2298,13 +2298,30 @@ Phase 7（ChatGPT自動分類機能）の統合テストとして、E2E・エラ
 
 ---
 
-#### Step 7.5.7: リリース準備
+#### Step 7.5.7: リリース準備（中止）
 **担当者**: project-orchestrator
-- [ ] リリースノート作成（v2.0新機能、変更点、注意事項）
-- [ ] ブランチマージ（`feature/chatgpt-classification` → `main`）
-- [ ] Dockerイメージビルド
-- [ ] 本番環境デプロイ
-- [ ] リリース後動作確認
+**ステータス**: ❌ 中止（仕様準拠確認で重大な問題7件発見）
+- [x] リリースノート作成（v2.0新機能、変更点、注意事項）
+- [x] PR #42作成（`feature/chatgpt-classification` → `main`）
+- [x] ~~ブランチマージ~~ → **中止**（PR #42 クローズ済み）
+- [ ] ~~Dockerイメージビルド~~ → **未実施**
+- [ ] ~~本番環境デプロイ~~ → **未実施**
+- [ ] ~~リリース後動作確認~~ → **未実施**
+
+**中止理由**:
+Codex MCP による仕様準拠確認の結果、Critical 3件を含む7件の重大な問題が発見されました。
+
+**発見された問題**:
+- Issue #46 (Critical): ChatGPT分類フローが実行されない（主機能未動作）
+- Issue #47 (Critical): /gpt/classify API仕様不整合
+- Issue #48 (High): /gpt/classification 金額・件数欠落
+- Issue #49 (High): /gpt/confirm トランザクション未使用
+- Issue #50 (Medium): /gpt/cancel セッションクリア不完全
+- Issue #51 (Critical): GPTClassifierモジュール仕様外
+- Issue #52 (High): SQLiteスキーマ不一致
+
+**次のステップ**:
+Phase 7.6として上記問題の修正を実施後、再度リリース準備を行います。
 
 #### テスト実行結果サマリ（2026-01-31実施）
 
