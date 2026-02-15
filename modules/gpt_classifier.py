@@ -4,7 +4,7 @@ ChatGPT分類モジュール
 OpenAI APIを使用して未登録店舗を自動分類するモジュール。
 
 主な機能:
-- 未登録店舗のバッチ分類（最大50件/リクエスト）
+- 未登録店舗のバッチ分類（最大10件/リクエスト）
 - カテゴリマスタに準拠した分類（C～V列）
 - 信頼度スコア付き分類結果
 - エラーハンドリング（リトライ、タイムアウト、フォールバック）
@@ -294,8 +294,11 @@ class GPTClassifier:
                 # レート制限エラー（429 Too Many Requests）
                 last_error = e
                 self._log_api_metrics(batch_index, attempt, batch, False, started, e)
-                logger.warning(f"レート制限エラーが発生しました（試行 {attempt}/{self.max_retries}, batch #{batch_index}）: {str(e)}")
-                self._sleep_with_backoff(attempt)
+                logger.warning(
+                    f"レート制限エラー（429）が発生しました（試行 {attempt}/{self.max_retries}, batch #{batch_index}）: {str(e)}"
+                    f"\n  → 対処法: GPT_BATCH_SIZE を減らす（現在: {self.batch_size}）、または時間を空けて再実行してください"
+                )
+                self._sleep_with_backoff(attempt, rate_limited=True)
 
             except APITimeoutError as e:
                 # タイムアウトエラー
@@ -322,15 +325,20 @@ class GPTClassifier:
         logger.error(f"最大リトライ回数に達しました (batch #{batch_index})。このバッチはデフォルトカテゴリを返却します")
         return self._handle_error(last_error or Exception("不明なエラー"), batch)
 
-    def _sleep_with_backoff(self, attempt: int) -> None:
+    def _sleep_with_backoff(self, attempt: int, rate_limited: bool = False) -> None:
         """
         指数バックオフでスリープする
 
         Args:
             attempt (int): 試行回数
+            rate_limited (bool): Rate Limit（429）エラーの場合True（より長い待機時間を適用）
         """
         if attempt < self.max_retries:
-            wait_time = 2 ** attempt
+            if rate_limited:
+                # Rate Limit時は長めの待機（10s → 30s → 60s）
+                wait_time = min(10 * (3 ** (attempt - 1)), 60)
+            else:
+                wait_time = 2 ** attempt
             logger.info(f"{wait_time}秒待機してリトライします")
             time.sleep(wait_time)
 
@@ -617,14 +625,27 @@ JSON形式で以下の構造で全店舗の分類結果を出力してくださ�
         logger.error(f"GPT分類エラー: {str(error)}")
         logger.info(f"全店舗にデフォルトカテゴリ（{DEFAULT_CATEGORY} / {DEFAULT_COLUMN}列）を設定します")
 
+        # Rate Limitエラーの場合、ユーザー向けガイダンスをログ出力
+        if isinstance(error, RateLimitError):
+            logger.warning(
+                "Rate Limit（429）エラーによりデフォルトカテゴリにフォールバックしました。"
+                "\n  → 対処法: (1) 時間を空けて再実行 (2) GPT_BATCH_SIZE を減らす (3) OpenAI課金プランを確認"
+            )
+
         result = {}
         if store_names:
+            # エラー種別に応じたユーザー向けメッセージ
+            if isinstance(error, RateLimitError):
+                error_msg = 'API制限超過（デフォルト）: 時間を空けて再実行してください'
+            else:
+                error_msg = f'分類エラー（デフォルト）: {str(error)[:50]}'
+
             for store_name in store_names:
                 result[store_name] = {
                     'category': DEFAULT_CATEGORY,
                     'column': DEFAULT_COLUMN,
                     'confidence': 'low',
-                    'reasoning': f'分類エラー（デフォルト）: {str(error)[:50]}'
+                    'reasoning': error_msg
                 }
 
         return result
