@@ -73,8 +73,8 @@ allowed-tools: Bash(gh:*), Bash(git:*), Read(*)
 Issue の title/body を読み、候補を出す（最大2〜3）。
 
 ### 例: キーワードのヒント
-- backend: API / DB / SQL / migration / queue / Laravel / PHP など
-- frontend: UI / component / CSS / React / Next.js / Vite など
+- backend: API / DB / SQL / migration / queue など
+- frontend: UI / component / CSS など
 - security: XSS / CSRF / injection / vuln / permission / secret など
 - test: test / spec / PHPUnit / Jest / e2e / CI など
 
@@ -124,6 +124,9 @@ Issue の title/body を読み、候補を出す（最大2〜3）。
   - `gh issue edit "<issueRef>" --add-label "..." --remove-label "..."`
 
 ---
+
+###注意点
+ソースの変更、実装は行わない
 
 ## 8) 結果表示（必須）
 実行後:

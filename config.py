@@ -37,7 +37,7 @@ class Config:
     GPT_MODEL = os.environ.get('GPT_MODEL', 'gpt-5')
     GPT_MAX_TOKENS = int(os.environ.get('GPT_MAX_TOKENS', '2000'))
     GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '0.3'))
-    GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '50'))
+    GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '10'))
 
     # ログ設定
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
