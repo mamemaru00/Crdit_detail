@@ -4,11 +4,12 @@ ChatGPT分類モジュール
 OpenAI APIを使用して未登録店舗を自動分類するモジュール。
 
 主な機能:
-- 未登録店舗のバッチ分類（最大10件/リクエスト）
+- 未登録店舗のバッチ分類（最大10件/リクエスト、バッチ間遅延3秒）
 - カテゴリマスタに準拠した分類（C～V列）
 - 信頼度スコア付き分類結果
 - エラーハンドリング（リトライ、タイムアウト、フォールバック）
 - ログ記録（API呼び出し履歴、エラー内容）
+- コスト最適化（gpt-5-mini、Few-shot削減）
 
 使用例:
     >>> from modules.gpt_classifier import GPTClassifier
@@ -118,7 +119,8 @@ class GPTClassifier:
         temperature: float = 0.3,
         timeout: int = 30,
         max_retries: int = 3,
-        batch_size: Optional[int] = None
+        batch_size: Optional[int] = None,
+        batch_delay_seconds: Optional[int] = None
     ):
         """
         GPT分類器を初期化する
@@ -131,6 +133,7 @@ class GPTClassifier:
             timeout (int): タイムアウト秒数（デフォルト: 30）
             max_retries (int): 最大リトライ回数（デフォルト: 3）
             batch_size (Optional[int]): バッチサイズ（デフォルト: Config.GPT_BATCH_SIZE）
+            batch_delay_seconds (Optional[int]): バッチ間遅延秒数（デフォルト: Config.GPT_BATCH_DELAY_SECONDS）
 
         Raises:
             ValueError: APIキーが空の場合
@@ -145,13 +148,14 @@ class GPTClassifier:
         self.timeout = timeout
         self.max_retries = max_retries
         self.batch_size = batch_size or Config.GPT_BATCH_SIZE
+        self.batch_delay_seconds = batch_delay_seconds if batch_delay_seconds is not None else Config.GPT_BATCH_DELAY_SECONDS
 
         # OpenAIクライアント初期化
         self.client = OpenAI(api_key=api_key, timeout=timeout)
 
         logger.info(f"GPTClassifierを初期化しました: model={model}, max_tokens={max_tokens}, "
                    f"temperature={temperature}, timeout={timeout}s, max_retries={max_retries}, "
-                   f"batch_size={self.batch_size}")
+                   f"batch_size={self.batch_size}, batch_delay={self.batch_delay_seconds}s")
 
     def classify_stores(self, store_names: List[str]) -> Dict[str, Dict[str, str]]:
         """
@@ -191,10 +195,18 @@ class GPTClassifier:
 
         # 複数バッチに分割して処理
         results: Dict[str, Dict[str, str]] = {}
-        for batch_index, batch in enumerate(self._chunked(normalized, self.batch_size), start=1):
-            logger.info(f"ChatGPT分類バッチ開始: #{batch_index} ({len(batch)}件)")
+        batches = list(self._chunked(normalized, self.batch_size))
+        total_batches = len(batches)
+
+        for batch_index, batch in enumerate(batches, start=1):
+            logger.info(f"ChatGPT分類バッチ開始: #{batch_index}/{total_batches} ({len(batch)}件)")
             batch_result = self._classify_batch(batch_index, batch)
             results.update(batch_result)
+
+            # バッチ間遅延（最後のバッチ以外）
+            if batch_index < total_batches and self.batch_delay_seconds > 0:
+                logger.info(f"次バッチまで {self.batch_delay_seconds}秒待機します")
+                time.sleep(self.batch_delay_seconds)
 
         logger.info(f"ChatGPT分類が完了しました: {len(results)}件分類")
         return results
@@ -426,7 +438,7 @@ class GPTClassifier:
         # 店舗名リストを整形
         store_list = "\n".join([f"  - {name}" for name in store_names])
 
-        # Few-shot例
+        # Few-shot例（2件に削減）
         examples = """
 例1:
 店舗名: ユシンヤ
@@ -445,37 +457,7 @@ class GPTClassifier:
   "category": "雑貨費",
   "column": "H",
   "confidence": "medium",
-  "reasoning": "オンラインショップは購入品により変動するため、デフォルトの雑貨費に分類"
-}
-
-例3:
-店舗名: セブンイレブン
-分類結果:
-{
-  "category": "食材費",
-  "column": "C",
-  "confidence": "high",
-  "reasoning": "コンビニエンスストアは主に食品・飲料を購入する頻度が高いため食材費に分類"
-}
-
-例4:
-店舗名: ユニクロ
-分類結果:
-{
-  "category": "衣服・化粧費",
-  "column": "I",
-  "confidence": "high",
-  "reasoning": "アパレルチェーンのため衣服・化粧費に分類"
-}
-
-例5:
-店舗名: Netflix
-分類結果:
-{
-  "category": "サブスク",
-  "column": "T",
-  "confidence": "high",
-  "reasoning": "定額制動画配信サービスのためサブスクに分類"
+  "reasoning": "オンラインショップは購入品が不明なため雑貨費（デフォルト）に分類"
 }
 """
 

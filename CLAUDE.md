@@ -91,7 +91,7 @@ project_root/
 - **chardet**: 文字コード検出
 - **python-dotenv**: 1.0+ (環境変数管理、.env読み込み)
 - **SQLite**: 3.x (セッションストア、マッピングDB、WALモード対応)
-- **OpenAI API**: GPT-5 (未登録店舗の自動カテゴリ分類、v2.0～)
+- **OpenAI API**: GPT-5-mini (未登録店舗の自動カテゴリ分類、v2.0～、v2.1でコスト最適化)
 
 ### Frontend
 - **Bootstrap**: 5.3 (UIフレームワーク)
@@ -145,10 +145,11 @@ docker-compose down
 # .envファイル例
 # OpenAI API設定（ChatGPT分類機能 v2.0）
 OPENAI_API_KEY=your-api-key-here
-GPT_MODEL=gpt-5
-GPT_MAX_TOKENS=2000
+GPT_MODEL=gpt-5-mini  # v2.1: コスト最適化（gpt-5→gpt-5-mini、5倍削減）
+GPT_MAX_TOKENS=1500  # v2.1: 出力コスト削減（2000→1500）
 GPT_TEMPERATURE=0.3
-GPT_BATCH_SIZE=50
+GPT_BATCH_SIZE=10  # v2.1: Rate Limit対策（50→10、Issue #73で変更）
+GPT_BATCH_DELAY_SECONDS=3  # v2.1: バッチ間遅延（Rate Limit対策、Issue #75）
 
 # Flask設定
 SECRET_KEY=your-secret-key-here

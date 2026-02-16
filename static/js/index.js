@@ -291,7 +291,29 @@
     } catch (error) {
       window.hideProgress();
       console.error('executeChatGPTClassification error:', error);
-      window.showToast('#errorToast', 'ChatGPT分類中にエラーが発生しました: ' + error.message);
+
+      // Rate Limitエラーの特定
+      const errorMsg = error.message || '';
+      const isRateLimitError = errorMsg.includes('Rate Limit') ||
+                               errorMsg.includes('429') ||
+                               errorMsg.includes('API制限超過');
+
+      if (isRateLimitError) {
+        // Rate Limit専用のエラーメッセージ
+        const rateLimitMsg =
+          '【API制限超過】ChatGPT APIの利用制限に達しました。\n\n' +
+          '対処法:\n' +
+          '1. 60秒ほど待ってから再度お試しください\n' +
+          '2. .envファイルの設定を確認してください\n' +
+          '   - GPT_BATCH_SIZE（現在: 10件/バッチ）を5に減らす\n' +
+          '   - GPT_BATCH_DELAY_SECONDS（現在: 3秒）を5秒に増やす\n' +
+          '3. OpenAI APIの課金プランをご確認ください';
+
+        window.showToast('#errorToast', rateLimitMsg);
+      } else {
+        // 通常のエラーメッセージ
+        window.showToast('#errorToast', 'ChatGPT分類中にエラーが発生しました: ' + errorMsg);
+      }
     }
   }
 
