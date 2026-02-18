@@ -103,3 +103,17 @@ tests/test_data/sample_real_*.csv
 
 # Playwright MCP
 .playwright-mcp/
+
+# 不要ファイル再混入防止（レポート・スクリーンショット・一時作業ファイル）
+テキスト*
+test_issue*
+issue*_*.png
+test_output.txt
+test_results_summary.txt
+=*
+PHASE*.md
+*_RESULT.md
+*_REPORT.md
+SECURITY_COMPLIANCE_AUDIT_REPORT.md
+report/
+screenshots/

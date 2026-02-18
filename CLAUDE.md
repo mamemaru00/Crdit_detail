@@ -370,3 +370,21 @@ web_search = true
 ### Contact & Support
 - プロジェクト管理: GitHub Issues
 - バージョン管理: Git / GitHub
+
+## ファイル管理ルール（重要）
+
+### レポート・作業ファイルの作成禁止
+
+以下のファイルはリポジトリに作成・コミットしてはならない：
+
+- **レポートファイル**: `PHASE*.md`、`*_REPORT.md`、`*_RESULT.md`、`SECURITY_COMPLIANCE_AUDIT_REPORT.md` 等
+- **スクリーンショット**: `screenshots/` ディレクトリ、`issue*_*.png` 等
+- **Issue対応一時ファイル**: `test_issue*.py`、`issue*.png` 等
+- **作業用テキストファイル**: `テキスト*`、`test_output.txt`、`test_results_summary.txt` 等
+- **pip installの破損ファイル**: `=*`
+
+**代替手段**: テスト結果・レポート・スクリーンショットは GitHub Issueのコメントに記録すること。
+
+### ディレクトリ管理
+- `report/` ディレクトリは使用禁止（.gitignore対象）
+- `screenshots/` ディレクトリは使用禁止（.gitignore対象）
