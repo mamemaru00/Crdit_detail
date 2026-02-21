@@ -39,6 +39,7 @@ class Config:
     GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '0.3'))
     GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '10'))
     GPT_BATCH_DELAY_SECONDS = int(os.environ.get('GPT_BATCH_DELAY_SECONDS', '3'))  # バッチ間遅延（秒）
+    GPT_MIN_BATCH_SIZE = int(os.environ.get('GPT_MIN_BATCH_SIZE', '1'))  # バッチ分割の最小サイズ（Rate Limit対策）
 
     # ログ設定
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')

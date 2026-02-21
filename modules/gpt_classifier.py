@@ -150,6 +150,9 @@ class GPTClassifier:
         self.batch_size = batch_size or Config.GPT_BATCH_SIZE
         self.batch_delay_seconds = batch_delay_seconds if batch_delay_seconds is not None else Config.GPT_BATCH_DELAY_SECONDS
 
+        # Rate Limit発生フラグ（_classify_batchがバッチ分割を行った場合にTrueにセット）
+        self._rate_limit_occurred = False
+
         # OpenAIクライアント初期化
         self.client = OpenAI(api_key=api_key, timeout=timeout)
 
@@ -198,15 +201,28 @@ class GPTClassifier:
         batches = list(self._chunked(normalized, self.batch_size))
         total_batches = len(batches)
 
+        current_delay = self.batch_delay_seconds
         for batch_index, batch in enumerate(batches, start=1):
             logger.info(f"ChatGPT分類バッチ開始: #{batch_index}/{total_batches} ({len(batch)}件)")
+
+            # バッチ処理前にRate Limitフラグをリセット
+            self._rate_limit_occurred = False
+
             batch_result = self._classify_batch(batch_index, batch)
             results.update(batch_result)
 
+            # Rate Limitによるバッチ分割が発生した場合、後続バッチの遅延を倍増
+            if self._rate_limit_occurred:
+                current_delay = min(current_delay * 2, 60) if current_delay > 0 else 60
+                logger.warning(
+                    f"Rate Limitが発生したため後続バッチの遅延を {current_delay}秒に増加します"
+                )
+
             # バッチ間遅延（最後のバッチ以外）
-            if batch_index < total_batches and self.batch_delay_seconds > 0:
-                logger.info(f"次バッチまで {self.batch_delay_seconds}秒待機します")
-                time.sleep(self.batch_delay_seconds)
+            if batch_index < total_batches:
+                if current_delay > 0:
+                    logger.info(f"次バッチまで {current_delay}秒待機します")
+                    time.sleep(current_delay)
 
         logger.info(f"ChatGPT分類が完了しました: {len(results)}件分類")
         return results
@@ -281,7 +297,7 @@ class GPTClassifier:
                             "content": prompt
                         }
                     ],
-                    max_tokens=self.max_tokens,
+                    max_completion_tokens=self.max_tokens,
                     temperature=self.temperature,
                     response_format={"type": "json_object"}
                 )
@@ -333,7 +349,27 @@ class GPTClassifier:
                 logger.error(f"予期しないエラーが発生しました (batch #{batch_index}): {str(e)}")
                 break
 
-        # 最大リトライ回数に達した場合、このバッチのみデフォルトカテゴリを返却
+        # 最大リトライ回数に達した場合
+        # RateLimitErrorかつバッチが分割可能な場合はバッチを半分に分割して再試行
+        if isinstance(last_error, RateLimitError) and len(batch) > Config.GPT_MIN_BATCH_SIZE:
+            half = len(batch) // 2
+            first_half = batch[:half]
+            second_half = batch[half:]
+            logger.warning(
+                f"Rate Limitのためバッチを分割します (batch #{batch_index}): "
+                f"{len(batch)}件 → {len(first_half)}件 + {len(second_half)}件"
+            )
+            # Rate Limit発生フラグをセット（classify_storesが後続バッチ遅延を倍増するために使用）
+            self._rate_limit_occurred = True
+            # 分割前に60秒待機
+            logger.info("バッチ分割前に60秒待機します")
+            time.sleep(60)
+            result_a = self._classify_batch(batch_index * 10, first_half)
+            time.sleep(60)
+            result_b = self._classify_batch(batch_index * 10 + 1, second_half)
+            result_a.update(result_b)
+            return result_a
+
         logger.error(f"最大リトライ回数に達しました (batch #{batch_index})。このバッチはデフォルトカテゴリを返却します")
         return self._handle_error(last_error or Exception("不明なエラー"), batch)
 
