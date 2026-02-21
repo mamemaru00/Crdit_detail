@@ -147,7 +147,7 @@ docker-compose down
 OPENAI_API_KEY=your-api-key-here
 GPT_MODEL=gpt-5-mini  # v2.1: コスト最適化（gpt-5→gpt-5-mini、5倍削減）
 GPT_MAX_TOKENS=1500  # v2.1: 出力コスト削減（2000→1500）
-GPT_TEMPERATURE=0.3
+GPT_TEMPERATURE=1.0  # v2.1: gpt-5-miniはtemperature=1.0のみサポート（0.3等は400エラー）
 GPT_BATCH_SIZE=10  # v2.1: Rate Limit対策（50→10、Issue #73で変更）
 GPT_BATCH_DELAY_SECONDS=3  # v2.1: バッチ間遅延（Rate Limit対策、Issue #75）
 

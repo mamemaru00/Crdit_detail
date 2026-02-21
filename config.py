@@ -36,7 +36,7 @@ class Config:
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
     GPT_MODEL = os.environ.get('GPT_MODEL', 'gpt-5-mini')
     GPT_MAX_TOKENS = int(os.environ.get('GPT_MAX_TOKENS', '1500'))
-    GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '0.3'))
+    GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '1.0'))  # gpt-5-miniはtemperature=1.0のみサポート
     GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '10'))
     GPT_BATCH_DELAY_SECONDS = int(os.environ.get('GPT_BATCH_DELAY_SECONDS', '3'))  # バッチ間遅延（秒）
     GPT_MIN_BATCH_SIZE = int(os.environ.get('GPT_MIN_BATCH_SIZE', '1'))  # バッチ分割の最小サイズ（Rate Limit対策）

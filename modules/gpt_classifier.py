@@ -106,7 +106,7 @@ class GPTClassifier:
         api_key (str): OpenAI APIキー
         model (str): 使用するGPTモデル（デフォルト: gpt-5）
         max_tokens (int): 最大トークン数（デフォルト: 2000）
-        temperature (float): 温度パラメータ（デフォルト: 0.3）
+        temperature (float): 温度パラメータ（デフォルト: 1.0、gpt-5-miniはtemperature=1.0のみサポート）
         timeout (int): タイムアウト秒数（デフォルト: 30）
         max_retries (int): 最大リトライ回数（デフォルト: 3）
     """
@@ -116,7 +116,7 @@ class GPTClassifier:
         api_key: str,
         model: str = "gpt-5",
         max_tokens: int = 2000,
-        temperature: float = 0.3,
+        temperature: float = 1.0,
         timeout: int = 30,
         max_retries: int = 3,
         batch_size: Optional[int] = None,
@@ -129,7 +129,7 @@ class GPTClassifier:
             api_key (str): OpenAI APIキー
             model (str): 使用するGPTモデル（デフォルト: gpt-5）
             max_tokens (int): 最大トークン数（デフォルト: 2000）
-            temperature (float): 温度パラメータ（デフォルト: 0.3）
+            temperature (float): 温度パラメータ（デフォルト: 1.0、gpt-5-miniはtemperature=1.0のみサポート）
             timeout (int): タイムアウト秒数（デフォルト: 30）
             max_retries (int): 最大リトライ回数（デフォルト: 3）
             batch_size (Optional[int]): バッチサイズ（デフォルト: Config.GPT_BATCH_SIZE）
@@ -285,9 +285,10 @@ class GPTClassifier:
                 logger.debug(f"API呼び出し試行 {attempt}/{self.max_retries} (batch #{batch_index})")
 
                 # OpenAI API呼び出し
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
+                # gpt-5-miniはtemperature=1.0のみサポートするため、1.0の場合はパラメータを省略する
+                api_params = {
+                    "model": self.model,
+                    "messages": [
                         {
                             "role": "system",
                             "content": "あなたは店舗名から商品カテゴリを分類するエキスパートです。日本の店舗・サービスに精通しています。"
@@ -297,10 +298,12 @@ class GPTClassifier:
                             "content": prompt
                         }
                     ],
-                    max_completion_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    response_format={"type": "json_object"}
-                )
+                    "max_completion_tokens": self.max_tokens,
+                    "response_format": {"type": "json_object"}
+                }
+                if self.temperature != 1.0:
+                    api_params["temperature"] = self.temperature
+                response = self.client.chat.completions.create(**api_params)
 
                 # 応答テキスト取得
                 response_text = response.choices[0].message.content
