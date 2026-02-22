@@ -944,7 +944,8 @@ def gpt_classify():
             model=Config.GPT_MODEL,
             max_tokens=Config.GPT_MAX_TOKENS,
             temperature=Config.GPT_TEMPERATURE,
-            batch_size=Config.GPT_BATCH_SIZE
+            batch_size=Config.GPT_BATCH_SIZE,
+            batch_delay_seconds=Config.GPT_BATCH_DELAY_SECONDS
         )
 
         # 4. ChatGPT分類実行

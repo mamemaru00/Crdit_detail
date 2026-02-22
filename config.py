@@ -34,10 +34,12 @@ class Config:
 
     # OpenAI API設定（ChatGPT分類機能 v2.0）
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-    GPT_MODEL = os.environ.get('GPT_MODEL', 'gpt-5')
-    GPT_MAX_TOKENS = int(os.environ.get('GPT_MAX_TOKENS', '2000'))
-    GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '0.3'))
-    GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '10'))
+    GPT_MODEL = os.environ.get('GPT_MODEL', 'gpt-5-mini')
+    GPT_MAX_TOKENS = int(os.environ.get('GPT_MAX_TOKENS', '4000'))  # v2.2: gpt-5-mini推論トークン対策（1500→4000、Issue #75 Task9）
+    GPT_TEMPERATURE = float(os.environ.get('GPT_TEMPERATURE', '1.0'))  # gpt-5-miniはtemperature=1.0のみサポート
+    GPT_BATCH_SIZE = int(os.environ.get('GPT_BATCH_SIZE', '5'))  # v2.2: トークン超過対策（10→5、Issue #75 Task9）
+    GPT_BATCH_DELAY_SECONDS = int(os.environ.get('GPT_BATCH_DELAY_SECONDS', '3'))  # バッチ間遅延（秒）
+    GPT_MIN_BATCH_SIZE = int(os.environ.get('GPT_MIN_BATCH_SIZE', '1'))  # バッチ分割の最小サイズ（Rate Limit対策）
 
     # ログ設定
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')

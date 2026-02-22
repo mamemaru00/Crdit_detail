@@ -4,11 +4,12 @@ ChatGPT分類モジュール
 OpenAI APIを使用して未登録店舗を自動分類するモジュール。
 
 主な機能:
-- 未登録店舗のバッチ分類（最大10件/リクエスト）
+- 未登録店舗のバッチ分類（最大10件/リクエスト、バッチ間遅延3秒）
 - カテゴリマスタに準拠した分類（C～V列）
 - 信頼度スコア付き分類結果
 - エラーハンドリング（リトライ、タイムアウト、フォールバック）
 - ログ記録（API呼び出し履歴、エラー内容）
+- コスト最適化（gpt-5-mini、Few-shot削減）
 
 使用例:
     >>> from modules.gpt_classifier import GPTClassifier
@@ -105,7 +106,7 @@ class GPTClassifier:
         api_key (str): OpenAI APIキー
         model (str): 使用するGPTモデル（デフォルト: gpt-5）
         max_tokens (int): 最大トークン数（デフォルト: 2000）
-        temperature (float): 温度パラメータ（デフォルト: 0.3）
+        temperature (float): 温度パラメータ（デフォルト: 1.0、gpt-5-miniはtemperature=1.0のみサポート）
         timeout (int): タイムアウト秒数（デフォルト: 30）
         max_retries (int): 最大リトライ回数（デフォルト: 3）
     """
@@ -115,10 +116,11 @@ class GPTClassifier:
         api_key: str,
         model: str = "gpt-5",
         max_tokens: int = 2000,
-        temperature: float = 0.3,
+        temperature: float = 1.0,
         timeout: int = 30,
         max_retries: int = 3,
-        batch_size: Optional[int] = None
+        batch_size: Optional[int] = None,
+        batch_delay_seconds: Optional[int] = None
     ):
         """
         GPT分類器を初期化する
@@ -127,10 +129,11 @@ class GPTClassifier:
             api_key (str): OpenAI APIキー
             model (str): 使用するGPTモデル（デフォルト: gpt-5）
             max_tokens (int): 最大トークン数（デフォルト: 2000）
-            temperature (float): 温度パラメータ（デフォルト: 0.3）
+            temperature (float): 温度パラメータ（デフォルト: 1.0、gpt-5-miniはtemperature=1.0のみサポート）
             timeout (int): タイムアウト秒数（デフォルト: 30）
             max_retries (int): 最大リトライ回数（デフォルト: 3）
             batch_size (Optional[int]): バッチサイズ（デフォルト: Config.GPT_BATCH_SIZE）
+            batch_delay_seconds (Optional[int]): バッチ間遅延秒数（デフォルト: Config.GPT_BATCH_DELAY_SECONDS）
 
         Raises:
             ValueError: APIキーが空の場合
@@ -145,13 +148,17 @@ class GPTClassifier:
         self.timeout = timeout
         self.max_retries = max_retries
         self.batch_size = batch_size or Config.GPT_BATCH_SIZE
+        self.batch_delay_seconds = batch_delay_seconds if batch_delay_seconds is not None else Config.GPT_BATCH_DELAY_SECONDS
+
+        # Rate Limit発生フラグ（_classify_batchがバッチ分割を行った場合にTrueにセット）
+        self._rate_limit_occurred = False
 
         # OpenAIクライアント初期化
         self.client = OpenAI(api_key=api_key, timeout=timeout)
 
         logger.info(f"GPTClassifierを初期化しました: model={model}, max_tokens={max_tokens}, "
                    f"temperature={temperature}, timeout={timeout}s, max_retries={max_retries}, "
-                   f"batch_size={self.batch_size}")
+                   f"batch_size={self.batch_size}, batch_delay={self.batch_delay_seconds}s")
 
     def classify_stores(self, store_names: List[str]) -> Dict[str, Dict[str, str]]:
         """
@@ -191,10 +198,31 @@ class GPTClassifier:
 
         # 複数バッチに分割して処理
         results: Dict[str, Dict[str, str]] = {}
-        for batch_index, batch in enumerate(self._chunked(normalized, self.batch_size), start=1):
-            logger.info(f"ChatGPT分類バッチ開始: #{batch_index} ({len(batch)}件)")
+        batches = list(self._chunked(normalized, self.batch_size))
+        total_batches = len(batches)
+
+        current_delay = self.batch_delay_seconds
+        for batch_index, batch in enumerate(batches, start=1):
+            logger.info(f"ChatGPT分類バッチ開始: #{batch_index}/{total_batches} ({len(batch)}件)")
+
+            # バッチ処理前にRate Limitフラグをリセット
+            self._rate_limit_occurred = False
+
             batch_result = self._classify_batch(batch_index, batch)
             results.update(batch_result)
+
+            # Rate Limitによるバッチ分割が発生した場合、後続バッチの遅延を倍増
+            if self._rate_limit_occurred:
+                current_delay = min(current_delay * 2, 60) if current_delay > 0 else 60
+                logger.warning(
+                    f"Rate Limitが発生したため後続バッチの遅延を {current_delay}秒に増加します"
+                )
+
+            # バッチ間遅延（最後のバッチ以外）
+            if batch_index < total_batches:
+                if current_delay > 0:
+                    logger.info(f"次バッチまで {current_delay}秒待機します")
+                    time.sleep(current_delay)
 
         logger.info(f"ChatGPT分類が完了しました: {len(results)}件分類")
         return results
@@ -257,9 +285,10 @@ class GPTClassifier:
                 logger.debug(f"API呼び出し試行 {attempt}/{self.max_retries} (batch #{batch_index})")
 
                 # OpenAI API呼び出し
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
+                # gpt-5-miniはtemperature=1.0のみサポートするため、1.0の場合はパラメータを省略する
+                api_params = {
+                    "model": self.model,
+                    "messages": [
                         {
                             "role": "system",
                             "content": "あなたは店舗名から商品カテゴリを分類するエキスパートです。日本の店舗・サービスに精通しています。"
@@ -269,10 +298,12 @@ class GPTClassifier:
                             "content": prompt
                         }
                     ],
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    response_format={"type": "json_object"}
-                )
+                    "max_completion_tokens": self.max_tokens,
+                    "response_format": {"type": "json_object"}
+                }
+                if self.temperature != 1.0:
+                    api_params["temperature"] = self.temperature
+                response = self.client.chat.completions.create(**api_params)
 
                 # 応答テキスト取得
                 response_text = response.choices[0].message.content
@@ -321,7 +352,27 @@ class GPTClassifier:
                 logger.error(f"予期しないエラーが発生しました (batch #{batch_index}): {str(e)}")
                 break
 
-        # 最大リトライ回数に達した場合、このバッチのみデフォルトカテゴリを返却
+        # 最大リトライ回数に達した場合
+        # RateLimitErrorかつバッチが分割可能な場合はバッチを半分に分割して再試行
+        if isinstance(last_error, RateLimitError) and len(batch) > Config.GPT_MIN_BATCH_SIZE:
+            half = len(batch) // 2
+            first_half = batch[:half]
+            second_half = batch[half:]
+            logger.warning(
+                f"Rate Limitのためバッチを分割します (batch #{batch_index}): "
+                f"{len(batch)}件 → {len(first_half)}件 + {len(second_half)}件"
+            )
+            # Rate Limit発生フラグをセット（classify_storesが後続バッチ遅延を倍増するために使用）
+            self._rate_limit_occurred = True
+            # 分割前に60秒待機
+            logger.info("バッチ分割前に60秒待機します")
+            time.sleep(60)
+            result_a = self._classify_batch(batch_index * 10, first_half)
+            time.sleep(60)
+            result_b = self._classify_batch(batch_index * 10 + 1, second_half)
+            result_a.update(result_b)
+            return result_a
+
         logger.error(f"最大リトライ回数に達しました (batch #{batch_index})。このバッチはデフォルトカテゴリを返却します")
         return self._handle_error(last_error or Exception("不明なエラー"), batch)
 
@@ -426,7 +477,7 @@ class GPTClassifier:
         # 店舗名リストを整形
         store_list = "\n".join([f"  - {name}" for name in store_names])
 
-        # Few-shot例
+        # Few-shot例（2件に削減）
         examples = """
 例1:
 店舗名: ユシンヤ
@@ -445,37 +496,7 @@ class GPTClassifier:
   "category": "雑貨費",
   "column": "H",
   "confidence": "medium",
-  "reasoning": "オンラインショップは購入品により変動するため、デフォルトの雑貨費に分類"
-}
-
-例3:
-店舗名: セブンイレブン
-分類結果:
-{
-  "category": "食材費",
-  "column": "C",
-  "confidence": "high",
-  "reasoning": "コンビニエンスストアは主に食品・飲料を購入する頻度が高いため食材費に分類"
-}
-
-例4:
-店舗名: ユニクロ
-分類結果:
-{
-  "category": "衣服・化粧費",
-  "column": "I",
-  "confidence": "high",
-  "reasoning": "アパレルチェーンのため衣服・化粧費に分類"
-}
-
-例5:
-店舗名: Netflix
-分類結果:
-{
-  "category": "サブスク",
-  "column": "T",
-  "confidence": "high",
-  "reasoning": "定額制動画配信サービスのためサブスクに分類"
+  "reasoning": "オンラインショップは購入品が不明なため雑貨費（デフォルト）に分類"
 }
 """
 
