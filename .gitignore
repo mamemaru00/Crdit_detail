@@ -119,4 +119,22 @@ run_csv_tests.bat
 
 # Windows特殊ファイル・破損ファイル
 nul
-report?*
+
+# レポート・ドキュメント一時ファイル（再混入防止）
+report/
+PHASE*.md
+*_RESULT.md
+*_REPORT.md
+
+# スクリーンショット
+screenshots/
+
+# Issue対応一時ファイル
+test_issue*
+issue*_*.png
+test_output.txt
+test_results_summary.txt
+
+# 作業用一時ファイル
+テキスト*
+=*

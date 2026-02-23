@@ -492,6 +492,7 @@ web_search = true
 - `07_frontend/`: フロントエンド概要
 - `08_library/`: ライブラリ仕様
 - `09_test/`: テスト仕様
+- `10_rule/`: 開発ルール・再発防止策
 
 ### Phase 4 Implementation Reports
 - `PHASE4_FIX_VERIFICATION_REPORT.md`: Phase 4問題修正検証レポート
@@ -507,3 +508,10 @@ web_search = true
 - codex: バグ修正、テストする推論するときは積極的に使用する
 - playwright: 画面のテストをする際に仕様してください。
 - serena : 長期記憶しておきたいことが合った時に積極的に使用する
+
+## ファイル管理ルール（重要）
+
+レポート・スクリーンショット・テスト一時ファイル等をリポジトリに作成しないこと。
+テスト結果やレポートは **GitHub Issue のコメント** に記録すること。
+
+詳細は [.claude/10_rule/00_file_management_rule.md](.claude/10_rule/00_file_management_rule.md) を参照。
