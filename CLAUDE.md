@@ -383,6 +383,8 @@ GET  /download/log  # 処理ログダウンロード
 - システム構成: [.claude/01_development_docs/00_system_architecture.md](.claude/01_development_docs/00_system_architecture.md)
 - バックエンドAPI: [.claude/02_backend/01_backend_api_routes.md](.claude/02_backend/01_backend_api_routes.md)
 - テスト仕様: [.claude/09_test/00_backend_test_specification.md](.claude/09_test/00_backend_test_specification.md)
+- ファイル管理ルール: [.claude/10_rule/00_file_management_rule.md](.claude/10_rule/00_file_management_rule.md)
+- **コードレビュー・テストルール**: [.claude/10_rule/01_code_review_and_testing_rule.md](.claude/10_rule/01_code_review_and_testing_rule.md)（実装・テスト時に必ず参照）
 
 ## AI Development Tools
 
