@@ -155,6 +155,8 @@ GPT_BATCH_DELAY_SECONDS=3  # v2.1: バッチ間遅延（Rate Limit対策、Issue
 SECRET_KEY=your-secret-key-here
 
 # Google Sheets設定
+# ※ /gpt/confirm はユーザーがフォームで入力したIDをセッション経由で使用するため、
+#    この値は /process 以外の直接参照用フォールバックとしては使用されない（Issue #78修正）
 SPREADSHEET_ID=your-spreadsheet-id-here
 
 # アプリケーション設定
