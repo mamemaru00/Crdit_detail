@@ -63,7 +63,7 @@ cp .env.example .env
 |--------|------|------|--------------|
 | `FLASK_ENV` | No | Flask実行環境（development/production）※Docker環境ではproduction推奨 | `development` |
 | `SECRET_KEY` | **Yes** | セッション暗号化キー（64文字以上） | なし |
-| `SPREADSHEET_ID` | **Yes** | GoogleスプレッドシートのID | なし |
+| `SPREADSHEET_ID` | No | GoogleスプレッドシートのID（省略可。メイン画面でのフォーム入力値が優先される。`/gpt/confirm` はセッション経由のフォーム入力値を使用） | なし |
 | `OPENAI_API_KEY` | **Yes (v2.0)** | OpenAI APIキー（ChatGPT分類機能に必要） | なし |
 | `DEFAULT_YEAR` | No | デフォルト処理年 | `2025` |
 | `LOG_LEVEL` | No | ログレベル（DEBUG/INFO/WARNING/ERROR） | `INFO` |

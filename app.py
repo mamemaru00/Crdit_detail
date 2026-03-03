@@ -590,7 +590,15 @@ def process():
             logger.info("未登録店舗なし、即座にGoogle Sheets更新")
 
             # Google Sheets更新処理
-            sheets_api.batch_update_cells(spreadsheet_id, target_year, monthly_aggregation)
+            client = sheets_api.authenticate()
+            spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
+            worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
+            updates = [
+                {'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True}
+                for month, col_dict in monthly_aggregation.items()
+                for col, amount in col_dict.items()
+            ]
+            sheets_api.batch_update_cells(worksheet, updates)
 
             logger.info("Google Sheets更新完了")
 
@@ -1067,7 +1075,7 @@ def gpt_confirm():
             'サブスク': 'T'
         }
 
-        for store_data in confirmed_data:
+        for store_data in classifications:
             store = store_data.get('store')
             category = store_data.get('category')
             column = category_to_column.get(category)
@@ -1126,7 +1134,12 @@ def gpt_confirm():
 
         csv_data = session_data.get('csv_data', [])
         target_year = session_data.get('target_year', datetime.now().year)
-        spreadsheet_id = os.getenv('SPREADSHEET_ID')
+        spreadsheet_id = session_data.get('spreadsheet_id')
+        if not spreadsheet_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'スプレッドシートIDがセッションに見つかりません。最初からやり直してください。'
+            }), 400
 
         logger.info("再カテゴリ判定開始（新規マッピングを反映）")
 
@@ -1137,7 +1150,15 @@ def gpt_confirm():
         logger.info("Google Sheets更新開始")
 
         # Sheets更新
-        sheets_api.batch_update_cells(spreadsheet_id, target_year, monthly_aggregation)
+        client = sheets_api.authenticate()
+        spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
+        worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
+        updates = [
+            {'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True}
+            for month, col_dict in monthly_aggregation.items()
+            for col, amount in col_dict.items()
+        ]
+        sheets_api.batch_update_cells(worksheet, updates)
 
         logger.info("Google Sheets更新完了")
 

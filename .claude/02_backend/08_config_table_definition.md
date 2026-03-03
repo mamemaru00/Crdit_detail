@@ -72,6 +72,10 @@
 
 ## 環境変数での管理
 
+> **Note (Issue #78修正)**: `SPREADSHEET_ID` は省略可。
+> `/gpt/confirm` エンドポイントはユーザーがメイン画面で入力したIDをセッション経由で参照するため、env値は使用しない。
+> env値が必要な場合はデフォルト値や他用途向けの参照のみに限定すること。
+
 ```bash
 SPREADSHEET_ID=10RJcB-_pOqsxA-6mGZ...
 DEFAULT_YEAR=2025

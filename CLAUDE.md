@@ -155,6 +155,8 @@ GPT_BATCH_DELAY_SECONDS=3  # v2.1: バッチ間遅延（Rate Limit対策、Issue
 SECRET_KEY=your-secret-key-here
 
 # Google Sheets設定
+# ※ /gpt/confirm はユーザーがフォームで入力したIDをセッション経由で使用するため、
+#    この値は /process 以外の直接参照用フォールバックとしては使用されない（Issue #78修正）
 SPREADSHEET_ID=your-spreadsheet-id-here
 
 # アプリケーション設定
@@ -381,6 +383,8 @@ GET  /download/log  # 処理ログダウンロード
 - システム構成: [.claude/01_development_docs/00_system_architecture.md](.claude/01_development_docs/00_system_architecture.md)
 - バックエンドAPI: [.claude/02_backend/01_backend_api_routes.md](.claude/02_backend/01_backend_api_routes.md)
 - テスト仕様: [.claude/09_test/00_backend_test_specification.md](.claude/09_test/00_backend_test_specification.md)
+- ファイル管理ルール: [.claude/10_rule/00_file_management_rule.md](.claude/10_rule/00_file_management_rule.md)
+- **コードレビュー・テストルール**: [.claude/10_rule/01_code_review_and_testing_rule.md](.claude/10_rule/01_code_review_and_testing_rule.md)（実装・テスト時に必ず参照）
 
 ## AI Development Tools
 
