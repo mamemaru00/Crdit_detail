@@ -21,7 +21,7 @@ Google Sheets API連携モジュール
     >>> worksheet = get_year_sheet(spreadsheet, 2025)
 
     # 4. セル更新（個別）
-    >>> row = get_month_row(8)  # 8月 → 11行目
+    >>> row = get_month_row(8)  # 8月 → 10行目
     >>> col = get_column_index('C')  # C列 → 3
     >>> result = update_cell_value(worksheet, row, col, 5780)
 
@@ -299,28 +299,27 @@ def get_month_row(month: int) -> int:
 
     スプレッドシート構造:
     - 行1: タイトル行
-    - 行2: 空行
-    - 行3: ヘッダー行
-    - 行4～15: 月別データ（1月～12月）
+    - 行2: ヘッダー行（カテゴリ名）
+    - 行3～14: 月別データ（1月～12月）
 
-    計算式: row = 3 + month
+    計算式: row = 2 + month
 
     Args:
         month: 月番号（1～12）
 
     Returns:
-        int: 行番号（4～15）
+        int: 行番号（3～14）
 
     Raises:
         ValueError: 月番号が1～12の範囲外の場合
 
     Example:
         >>> get_month_row(1)  # 1月
-        4
+        3
         >>> get_month_row(8)  # 8月
-        11
+        10
         >>> get_month_row(12)  # 12月
-        15
+        14
     """
     # 月番号のバリデーション
     if not isinstance(month, int):
@@ -332,7 +331,7 @@ def get_month_row(month: int) -> int:
         raise ValueError(f"月番号が範囲外です: {month}（有効範囲: 1～12）")
 
     # 行番号計算
-    row = 3 + month
+    row = 2 + month
 
     logger.debug(f"[ROW:CALC] 月={month} -> 行={row}")
     return row

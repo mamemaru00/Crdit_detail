@@ -395,11 +395,11 @@ def test_get_year_sheet_api_error(mock_spreadsheet):
 # ==================== 4. 月行番号計算テスト（4ケース） ====================
 
 @pytest.mark.parametrize("month,expected_row", [
-    (1, 4),    # 1月 → 4行目
-    (2, 5),    # 2月 → 5行目
-    (6, 9),    # 6月 → 9行目
-    (8, 11),   # 8月 → 11行目
-    (12, 15),  # 12月 → 15行目
+    (1, 3),    # 1月 → 3行目
+    (2, 4),    # 2月 → 4行目
+    (6, 8),    # 6月 → 8行目
+    (8, 10),   # 8月 → 10行目
+    (12, 14),  # 12月 → 14行目
 ])
 def test_get_month_row_valid_months(month, expected_row):
     """全月（1～12）の行番号計算確認
@@ -434,8 +434,8 @@ def test_get_month_row_invalid_type(invalid_type):
 
 
 @pytest.mark.parametrize("edge_month,expected_row", [
-    (1, 4),   # 最小値（1月）
-    (12, 15)  # 最大値（12月）
+    (1, 3),   # 最小値（1月）
+    (12, 14)  # 最大値（12月）
 ])
 def test_get_month_row_edge_cases(edge_month, expected_row):
     """エッジケース（1月、12月）
@@ -949,7 +949,7 @@ def test_full_workflow_single_cell(mock_creds_from_file, mock_authorize, temp_cr
 
     # 4. 月行番号計算
     row = get_month_row(8)
-    assert row == 11
+    assert row == 10
 
     # 5. 列番号計算
     col = get_column_index('C')
@@ -1017,9 +1017,9 @@ def test_multiple_months_update(mock_worksheet):
 
     # 各月の行番号が正しく計算されていることを確認
     details = result['update_details']
-    assert details[0]['row'] == 4   # 1月
-    assert details[1]['row'] == 9   # 6月
-    assert details[2]['row'] == 15  # 12月
+    assert details[0]['row'] == 3   # 1月
+    assert details[1]['row'] == 8   # 6月
+    assert details[2]['row'] == 14  # 12月
 
 
 def test_multiple_categories_update(mock_worksheet):

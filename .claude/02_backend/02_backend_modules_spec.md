@@ -102,7 +102,7 @@ def batch_update(sheet: Worksheet, updates: List[Dict]):
 ### 更新ロジック
 ```python
 # 行番号計算
-row = 3 + month  # ヘッダー3行 + 月番号
+row = 2 + month  # ヘッダー2行 + 月番号
 
 # 既存値取得
 current_value = sheet.cell(row, column).value or 0
