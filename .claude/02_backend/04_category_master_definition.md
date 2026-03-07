@@ -57,8 +57,8 @@ column_index = ord(column) - ord('A') + 1
 ### 行番号計算
 ```python
 # 月データの行番号
-row = 3 + month  # ヘッダー3行 + 月番号
-# 例: 8月 → 行11
+row = 2 + month  # ヘッダー2行 + 月番号
+# 例: 8月 → 行10
 ```
 
 ## 管理方法
