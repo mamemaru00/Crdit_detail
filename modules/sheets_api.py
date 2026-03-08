@@ -416,7 +416,7 @@ def _parse_cell_value(value) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     try:
-        cleaned = str(value).replace('¥', '').replace(',', '').replace('\\', '').strip()
+        cleaned = str(value).replace('¥', '').replace('￥', '').replace(',', '').replace('\\', '').strip()
         if not cleaned:
             return 0.0
         return float(cleaned)
@@ -711,7 +711,7 @@ def batch_update_cells(
                 logger.info(f"範囲取得: {range_name}")
 
                 # 2-3. 範囲一括取得（1回のAPI呼び出し）
-                batch_result = worksheet.batch_get([range_name])
+                batch_result = worksheet.batch_get([range_name], value_render_option='UNFORMATTED_VALUE')
                 existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
 
                 logger.info(f"既存値取得完了: {len(existing_values_2d)}行")
@@ -761,7 +761,7 @@ def batch_update_cells(
                     range_name = f"{gspread.utils.rowcol_to_a1(min_row, min_col)}:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
                     logger.info(f"範囲分割再試行（chunk {i//chunk_size + 1}）: {range_name}")
 
-                    batch_result = worksheet.batch_get([range_name])
+                    batch_result = worksheet.batch_get([range_name], value_render_option='UNFORMATTED_VALUE')
                     existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
 
                     # 値を抽出
