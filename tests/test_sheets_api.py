@@ -37,6 +37,7 @@ from modules.sheets_api import (
     batch_update_cells,
     _apply_rate_limit,
     _retry_on_api_error,
+    _parse_cell_value,
     AuthenticationError,
     SpreadsheetNotFoundError,
     SheetNotFoundError,
@@ -1077,18 +1078,17 @@ def test_error_recovery(mock_worksheet):
 # ==================== カバレッジ向上用テスト ====================
 
 def test_get_cell_value_non_numeric(mock_worksheet):
-    """数値以外のセル値でエラー
+    """数値以外のセル値は0.0にフォールバック
 
-    数値に変換できない値の場合にCellUpdateErrorが発生することを確認
+    _parse_cell_value による安全変換により、数値に変換できない値の場合は
+    CellUpdateError を発生させずに 0.0 を返すことを確認
     """
     mock_cell = MagicMock()
     mock_cell.value = "非数値"
     mock_worksheet.cell.return_value = mock_cell
 
-    with pytest.raises(CellUpdateError) as exc_info:
-        get_cell_value(mock_worksheet, 11, 2)
-
-    assert "セル値の数値変換に失敗しました" in exc_info.value.message
+    result = get_cell_value(mock_worksheet, 11, 2)
+    assert result == 0.0
 
 
 def test_batch_update_missing_field(mock_worksheet):
@@ -1148,3 +1148,24 @@ def test_sheets_api_error_no_details():
     assert error.message == "Test error"
     assert error.details == {}
     assert isinstance(error.details, dict)
+
+
+# ==================== _parse_cell_value テスト ====================
+
+@pytest.mark.parametrize("input_value,expected", [
+    ("¥8,035", 8035.0),
+    ("¥1,308", 1308.0),
+    ("￥8,035", 8035.0),   # 全角円記号
+    ("￥1,308", 1308.0),   # 全角円記号
+    ("1234", 1234.0),
+    (1234, 1234.0),
+    (1234.5, 1234.5),
+    ("", 0.0),
+    (None, 0.0),
+    ("  ", 0.0),
+    ("¥0", 0.0),
+    ("10,000,000", 10000000.0),
+])
+def test_parse_cell_value(input_value, expected):
+    """通貨フォーマットを含むセル値の数値変換テスト"""
+    assert _parse_cell_value(input_value) == expected

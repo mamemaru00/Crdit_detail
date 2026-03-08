@@ -391,6 +391,40 @@ def get_column_index(column_letter: str) -> int:
     return column_index
 
 
+def _parse_cell_value(value) -> float:
+    """セル値を数値に変換（通貨フォーマット対応）
+
+    スプレッドシートのセル値を安全にfloatに変換する。
+    通貨記号（¥）やカンマ（,）を含む文字列にも対応。
+
+    Args:
+        value: セル値（None, str, int, float）
+
+    Returns:
+        float: 数値変換結果。変換不可の場合は0.0
+
+    Example:
+        >>> _parse_cell_value("¥8,035")
+        8035.0
+        >>> _parse_cell_value(1234)
+        1234.0
+        >>> _parse_cell_value(None)
+        0.0
+    """
+    if value is None or value == "" or (isinstance(value, str) and value.strip() == ""):
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        cleaned = str(value).replace('¥', '').replace('￥', '').replace(',', '').replace('\\', '').strip()
+        if not cleaned:
+            return 0.0
+        return float(cleaned)
+    except (ValueError, TypeError):
+        logger.warning(f"[CELL:PARSE] セル値の数値変換に失敗: '{value}' → 0.0")
+        return 0.0
+
+
 def get_cell_value(worksheet: Worksheet, row: int, column: int) -> float:
     """
     指定セルの値を取得する
@@ -421,8 +455,8 @@ def get_cell_value(worksheet: Worksheet, row: int, column: int) -> float:
             logger.debug(f"[CELL:GET] 行={row}, 列={column}, 値=0.0（空セル）")
             return 0.0
 
-        # 数値変換
-        value = float(cell_value)
+        # 数値変換（通貨フォーマット対応）
+        value = _parse_cell_value(cell_value)
         logger.debug(f"[CELL:GET] 行={row}, 列={column}, 値={value}")
         return value
 
@@ -431,13 +465,6 @@ def get_cell_value(worksheet: Worksheet, row: int, column: int) -> float:
         raise CellUpdateError(
             f"セル値取得に失敗しました（API）: 行={row}, 列={column}",
             details={'row': row, 'column': column, 'error': str(e)}
-        )
-
-    except ValueError as e:
-        logger.error(f"[CELL:ERROR] セル値の数値変換に失敗: 行={row}, 列={column}, 値={cell_value}")
-        raise CellUpdateError(
-            f"セル値の数値変換に失敗しました: 行={row}, 列={column}, 値={cell_value}",
-            details={'row': row, 'column': column, 'value': cell_value, 'error': str(e)}
         )
 
     except Exception as e:
@@ -684,7 +711,7 @@ def batch_update_cells(
                 logger.info(f"範囲取得: {range_name}")
 
                 # 2-3. 範囲一括取得（1回のAPI呼び出し）
-                batch_result = worksheet.batch_get([range_name])
+                batch_result = worksheet.batch_get([range_name], value_render_option='UNFORMATTED_VALUE')
                 existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
 
                 logger.info(f"既存値取得完了: {len(existing_values_2d)}行")
@@ -707,11 +734,8 @@ def batch_update_cells(
                     except (IndexError, TypeError):
                         existing_value = ""
 
-                    # 数値変換
-                    try:
-                        cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
-                    except (ValueError, TypeError):
-                        cell_info['old_value'] = 0.0
+                    # 数値変換（通貨フォーマット対応）
+                    cell_info['old_value'] = _parse_cell_value(existing_value)
 
                     existing_values_map[(row, col)] = cell_info['old_value']
                     logger.debug(f"セル({row},{col}): 既存値='{existing_value}' -> {cell_info['old_value']}")
@@ -737,7 +761,7 @@ def batch_update_cells(
                     range_name = f"{gspread.utils.rowcol_to_a1(min_row, min_col)}:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
                     logger.info(f"範囲分割再試行（chunk {i//chunk_size + 1}）: {range_name}")
 
-                    batch_result = worksheet.batch_get([range_name])
+                    batch_result = worksheet.batch_get([range_name], value_render_option='UNFORMATTED_VALUE')
                     existing_values_2d = batch_result[0] if batch_result and len(batch_result) > 0 else []
 
                     # 値を抽出
@@ -757,11 +781,8 @@ def batch_update_cells(
                         except (IndexError, TypeError):
                             existing_value = ""
 
-                        # 数値変換
-                        try:
-                            cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
-                        except (ValueError, TypeError):
-                            cell_info['old_value'] = 0.0
+                        # 数値変換（通貨フォーマット対応）
+                        cell_info['old_value'] = _parse_cell_value(existing_value)
 
                         logger.debug(f"セル({row},{col}): 既存値={cell_info['old_value']}")
 
@@ -776,7 +797,7 @@ def batch_update_cells(
                         try:
                             cell = worksheet.cell(row, col)
                             existing_value = cell.value
-                            cell_info['old_value'] = float(existing_value) if existing_value and str(existing_value).strip() else 0.0
+                            cell_info['old_value'] = _parse_cell_value(existing_value)
                             logger.debug(f"セル({row},{col}): 個別取得 既存値={cell_info['old_value']}")
                         except Exception as cell_error:
                             logger.error(f"セル({row},{col})取得エラー: {str(cell_error)}")
