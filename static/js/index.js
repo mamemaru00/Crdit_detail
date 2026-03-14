@@ -178,10 +178,9 @@
     }
 
     const spreadsheetId = document.getElementById('spreadsheetId').value.trim();
-    const targetYear = parseInt(document.getElementById('targetYear').value);
 
     // 確認ダイアログ
-    if (!confirm(`${targetYear}年のスプレッドシートにデータを反映します。よろしいですか？`)) {
+    if (!confirm('スプレッドシートにデータを反映します。よろしいですか？')) {
       return;
     }
 
@@ -197,8 +196,7 @@
           'X-CSRF-Token': window.getCsrfToken()
         },
         body: JSON.stringify({
-          spreadsheet_id: spreadsheetId,
-          target_year: targetYear
+          spreadsheet_id: spreadsheetId
         })
       });
 
