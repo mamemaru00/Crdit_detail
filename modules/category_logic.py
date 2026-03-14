@@ -951,9 +951,9 @@ def categorize_data(
     Returns:
         tuple[List[Dict], Dict, List[Dict]]:
             - categorized_data: カテゴリ判定済みデータ（全件）
-            - monthly_aggregation: 月別集計データ（登録済みのみ）
+            - monthly_aggregation: 年月別集計データ（登録済みのみ）
                 {
-                    月番号(int): {
+                    (年(int), 月(int)): {
                         列記号(str): 金額(float)
                     }
                 }
@@ -974,7 +974,7 @@ def categorize_data(
         >>> categorized_data, monthly_agg, unregistered = categorize_data(csv_data, mapping_manager)
         >>> len(categorized_data)
         2
-        >>> 8 in monthly_agg  # 登録済み店舗のみ
+        >>> (2025, 8) in monthly_agg  # 登録済み店舗のみ
         True
         >>> len(unregistered)
         1
@@ -1000,24 +1000,26 @@ def categorize_data(
         if record.get('category') is None or record.get('column') is None:
             continue
 
-        # 日付から月番号を抽出（'2025/08/15' → 8）
+        # 日付から年と月を抽出（'2025/08/15' → year=2025, month=8）
         date_str = record.get('date', '')
         try:
+            year = int(date_str.split('/')[0])
             month = int(date_str.split('/')[1])
         except (IndexError, ValueError):
             # 日付形式が不正な場合はスキップ
             continue
 
-        # 月別集計に追加
-        if month not in monthly_aggregation:
-            monthly_aggregation[month] = {}
+        # 年月別集計に追加（キーは (year, month) タプル）
+        key = (year, month)
+        if key not in monthly_aggregation:
+            monthly_aggregation[key] = {}
 
         column = record['column']
         amount = record.get('amount', 0)
 
-        if column not in monthly_aggregation[month]:
-            monthly_aggregation[month][column] = 0.0
+        if column not in monthly_aggregation[key]:
+            monthly_aggregation[key][column] = 0.0
 
-        monthly_aggregation[month][column] += amount
+        monthly_aggregation[key][column] += amount
 
     return categorized_data, monthly_aggregation, unregistered_stores

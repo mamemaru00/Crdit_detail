@@ -24,6 +24,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import uuid
+from collections import defaultdict
 from dotenv import load_dotenv
 
 # .envファイルから環境変数をロード（config.pyより前に実行）
@@ -490,8 +491,7 @@ def process():
 
     Request JSON:
         {
-            'spreadsheet_id': str,
-            'target_year': int
+            'spreadsheet_id': str
         }
 
     Returns:
@@ -530,7 +530,6 @@ def process():
             )), 400
 
         spreadsheet_id = request_data.get('spreadsheet_id')
-        target_year = request_data.get('target_year')
 
         # 2. パラメータバリデーション
         if not spreadsheet_id:
@@ -538,13 +537,6 @@ def process():
             return jsonify(create_response(
                 'error',
                 message='スプレッドシートIDを指定してください'
-            )), 400
-
-        if not target_year or not isinstance(target_year, int):
-            logger.warning(f"対象年が不正です: {target_year}")
-            return jsonify(create_response(
-                'error',
-                message='対象年を正しく指定してください'
             )), 400
 
         # 3. セッションストアからCSVデータ取得
@@ -558,16 +550,15 @@ def process():
                 message='先にCSVファイルをプレビューしてください'
             )), 400
 
-        logger.info(f"処理対象: {len(csv_data)}件, スプレッドシートID: {spreadsheet_id}, 対象年: {target_year}")
+        logger.info(f"処理対象: {len(csv_data)}件, スプレッドシートID: {spreadsheet_id}")
 
         # 4. カテゴリ判定
         categorized_data, monthly_aggregation, unregistered_stores = category_logic.categorize_data(csv_data, mapping_manager)
 
         logger.info(f"カテゴリ判定完了: 未登録店舗 {len(unregistered_stores)}件")
 
-        # 5. セッションにspreadsheet_idとtarget_yearを保存（/gpt/confirmで使用）
+        # 5. セッションにspreadsheet_idを保存（/gpt/confirmで使用）
         session_data['spreadsheet_id'] = spreadsheet_id
-        session_data['target_year'] = target_year
         session_store.save(get_server_session_id(), session_data)
 
         # 6. 未登録店舗の有無で分岐
@@ -589,16 +580,20 @@ def process():
             # パターンB: 未登録なし → 即座にSheets更新
             logger.info("未登録店舗なし、即座にGoogle Sheets更新")
 
-            # Google Sheets更新処理
+            # Google Sheets更新処理（年ごとにシートを取得してループ）
+            year_updates = defaultdict(list)
+            for (year, month), col_dict in monthly_aggregation.items():
+                for col, amount in col_dict.items():
+                    year_updates[year].append({
+                        'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True
+                    })
+
             client = sheets_api.authenticate()
             spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
-            worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
-            updates = [
-                {'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True}
-                for month, col_dict in monthly_aggregation.items()
-                for col, amount in col_dict.items()
-            ]
-            sheets_api.batch_update_cells(worksheet, updates)
+            for year, updates in year_updates.items():
+                logger.info(f"{year}年シートに{len(updates)}件更新")
+                worksheet = sheets_api.get_year_sheet(spreadsheet, year)
+                sheets_api.batch_update_cells(worksheet, updates)
 
             logger.info("Google Sheets更新完了")
 
@@ -1133,7 +1128,6 @@ def gpt_confirm():
             }), 400
 
         csv_data = session_data.get('csv_data', [])
-        target_year = session_data.get('target_year', datetime.now().year)
         spreadsheet_id = session_data.get('spreadsheet_id')
         if not spreadsheet_id:
             return jsonify({
@@ -1149,16 +1143,20 @@ def gpt_confirm():
 
         logger.info("Google Sheets更新開始")
 
-        # Sheets更新
+        # Sheets更新（年ごとにシートを取得してループ）
+        year_updates = defaultdict(list)
+        for (year, month), col_dict in monthly_aggregation.items():
+            for col, amount in col_dict.items():
+                year_updates[year].append({
+                    'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True
+                })
+
         client = sheets_api.authenticate()
         spreadsheet = sheets_api.open_spreadsheet(client, spreadsheet_id)
-        worksheet = sheets_api.get_year_sheet(spreadsheet, target_year)
-        updates = [
-            {'month': month, 'column_letter': col, 'amount': amount, 'add_mode': True}
-            for month, col_dict in monthly_aggregation.items()
-            for col, amount in col_dict.items()
-        ]
-        sheets_api.batch_update_cells(worksheet, updates)
+        for year, updates in year_updates.items():
+            logger.info(f"{year}年シートに{len(updates)}件更新")
+            worksheet = sheets_api.get_year_sheet(spreadsheet, year)
+            sheets_api.batch_update_cells(worksheet, updates)
 
         logger.info("Google Sheets更新完了")
 
