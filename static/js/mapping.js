@@ -27,14 +27,6 @@ let currentPage = 1;
 // 編集中のマッピングID
 let editingMappingId = null;
 
-// 一致方法の日本語ラベルマッピング
-const MATCH_TYPE_LABELS = {
-  'exact': '完全一致',
-  'startswith': '前方一致',
-  'contains': '部分一致',
-  'keyword': 'キーワード一致'
-};
-
 // ==================== 初期化処理 ====================
 
 $(document).ready(function() {
@@ -220,7 +212,7 @@ function renderTable() {
   // データが0件の場合
   if (pageData.length === 0) {
     const noResultRow = $('<tr>');
-    const noResultCell = $('<td colspan="6" class="text-center text-muted py-4">');
+    const noResultCell = $('<td colspan="4" class="text-center text-muted py-4">');
     noResultCell.text('検索条件に一致するマッピングがありません');
     noResultRow.append(noResultCell);
     tbody.append(noResultRow);
@@ -250,21 +242,10 @@ function renderTable() {
 function createMappingRow(mapping) {
   const row = $('<tr>');
 
-  // ID列
-  const idCell = $('<td>');
-  idCell.text(mapping.id);
-  row.append(idCell);
-
   // 店舗名パターン列
   const storeNameCell = $('<td>');
   storeNameCell.text(mapping.pattern);
   row.append(storeNameCell);
-
-  // 一致方法列
-  const matchTypeCell = $('<td>');
-  const matchTypeLabel = MATCH_TYPE_LABELS[mapping.match_type] || mapping.match_type;
-  matchTypeCell.text(matchTypeLabel);
-  row.append(matchTypeCell);
 
   // カテゴリ列
   const categoryCell = $('<td>');
