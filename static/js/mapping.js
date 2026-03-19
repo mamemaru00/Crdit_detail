@@ -401,7 +401,7 @@ function handleAddMapping() {
   // フォームデータ取得
   const formData = {
     pattern: $('#storeNameInput').val().trim(),
-    match_type: $('#matchTypeSelect').val(),
+    match_type: 'contains',
     category: $('#categorySelect').val(),
     column: $('#columnSelect').val()
   };
@@ -474,7 +474,6 @@ function showEditForm(mapping) {
   // フォームにデータを設定
   $('#editMappingId').val(mapping.id);
   $('#editStoreNameInput').val(mapping.pattern);
-  $('#editMatchTypeSelect').val(mapping.match_type);
   $('#editCategorySelect').val(mapping.category);
   $('#editColumnSelect').val(mapping.column);
 
@@ -519,7 +518,7 @@ function handleEditMapping() {
   // フォームデータ取得
   const formData = {
     pattern: $('#editStoreNameInput').val().trim(),
-    match_type: $('#editMatchTypeSelect').val(),
+    match_type: 'contains',
     category: $('#editCategorySelect').val(),
     column: $('#editColumnSelect').val()
   };
